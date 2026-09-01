@@ -4,37 +4,58 @@
 
 ### Company
 
-A canonical organization. Multiple textual names or domains may resolve to one Company.
+A canonical organization. Multiple textual names, domains, brands, or source-specific identities may resolve to one Company.
 
 ### JobOpening
 
 The canonical hiring need. One opening can be represented by many publications across many sources and at different times.
 
-Typical properties include canonical title, company, inferred role family, seniority, current market state, first seen, last seen, and canonicalized requirements.
+Typical properties include canonical title, company, role family, seniority, current derived market state, first seen, last seen, and canonicalized requirements.
 
 ### JobPosting
 
-A concrete publication of a JobOpening on a source. It owns source-specific identifiers, URL, source wording, source timestamps, and source-specific state.
+A concrete publication of a JobOpening on a source. It owns source-specific identifiers, URL, source wording, source timestamps, and source-specific lifecycle.
 
 One JobOpening can have many JobPostings.
 
+### SourceObservation
+
+Immutable evidence of what a source showed at a specific time. Observations are inputs to reconciliation, not automatic mutations of canonical state.
+
+See `observations.md` for time and absence semantics.
+
 ### PostingSnapshot
 
-An immutable observation of a JobPosting at a point in time. Snapshots preserve source facts before later changes overwrite a projection.
+An immutable normalized view of a JobPosting observation at a point in time. Snapshots preserve source facts before later changes alter projections.
 
-Examples of snapshot fields include title, description hash, compensation text, location wording, remote policy wording, employment type, requirements, and observed availability.
+Examples include title, description hash, compensation text, location wording, remote policy wording, employment type, requirements, and observed availability.
 
 ### IngestionRecord
 
-Describes how LMX received an observation. This is separate from where the employer published it.
+Describes how LMX received evidence. This is separate from where the employer published it.
 
-Examples of ingestion transport include RSS, HTTP API, HTTP scrape, browser crawl, webhook, API submission, manual entry, and import.
+Acquisition transports include RSS, HTTP API, HTML retrieval and browser automation. Ingress interfaces such as manual entry, API, webhook, MCP and import are separate application entry points.
 
 ### RawPayload
 
 The original payload when practical: HTML, JSON, RSS item, API body, or manual form payload. Raw data can be stored outside PostgreSQL while metadata and hashes remain in PostgreSQL.
 
-Preserving raw input allows old observations to be reprocessed after parser improvements.
+Preserving raw input allows historical observations to be reprocessed after parser improvements.
+
+### ResolutionDecision
+
+An explainable, versioned identity-resolution decision linking a JobPosting to a JobOpening or merging canonical identities.
+
+Store sufficient evidence to explain and reverse a decision:
+
+- resolver/rules/model version
+- confidence
+- deterministic evidence
+- semantic similarity evidence
+- actor/executor when manually or agent-assisted
+- decision timestamp
+
+Identity changes must support unlink/relink and merge-revert operations.
 
 ### CompensationObservation
 
@@ -42,20 +63,33 @@ Preserves original compensation data and context. Do not collapse everything int
 
 Relevant fields include original text, currency, minimum, maximum, period, gross/net when known, employment context, country context, and evidence level.
 
-Normalized hourly, monthly, and annual values may be computed for analytics, but original source values remain authoritative.
+Normalized hourly, monthly and annual values may be computed for analytics, but original source values remain authoritative.
+
+Cross-currency analytics must retain conversion metadata:
+
+- normalized currency
+- conversion rate
+- conversion date
+- conversion source
+
+Historical charts must not confuse exchange-rate movement with labor-market compensation movement.
 
 ### FitAssessment
 
-A versioned assessment of how attractive an opportunity is. It should keep the model/rules version and evidence used.
+A versioned assessment of how attractive an opportunity is. Keep the model/rules version and evidence used.
 
-Maintain at least two concepts:
+Maintain at least two independent concepts:
 
-- Opportunity Score: overall attractiveness.
-- Action Priority: how much attention the opportunity deserves now, considering freshness, source friction, eligibility, and likely speed to a real conversation.
+- Opportunity Score - overall attractiveness.
+- Action Priority - how much attention the opportunity deserves now, considering freshness, source friction, eligibility, and likely speed to a real conversation.
 
 ### Application
 
-The user's application or intended application to a JobOpening.
+One concrete application attempt related to a JobOpening, optionally through a specific JobPosting.
+
+Do not assume one permanent Application per user/opening. The same opening can reopen, or the user can apply again through a different path months later.
+
+Useful fields include `via_posting_id`, applied time, current personal stage, source/channel, and next action.
 
 ### Interaction
 
@@ -67,9 +101,9 @@ Recruiter, hiring manager, interviewer, or other person involved in the process.
 
 ## JobOpening versus JobPosting
 
-A single opening may appear at different times and under slightly different titles on multiple sources. LMX should resolve these to one JobOpening when confidence is sufficient, while preserving every JobPosting and every observation.
+A single opening may appear at different times and under slightly different titles on multiple sources. LMX should resolve these to one JobOpening when confidence is sufficient, while preserving every JobPosting and observation.
 
-Deduplication should combine deterministic and semantic evidence:
+Deduplication combines deterministic and semantic evidence:
 
 1. exact or canonical URL
 2. external vacancy identifier
@@ -83,6 +117,8 @@ Deduplication should combine deterministic and semantic evidence:
 
 A company may legitimately have several simultaneous openings with the same title, so company plus title alone is never sufficient proof.
 
+Resolution must be reversible. Incorrect links or merges must be correctable without deleting historical evidence.
+
 ## Geographic eligibility
 
 Geography is an attribute, not a deletion rule.
@@ -95,9 +131,9 @@ If Ukraine is not supported but Poland is supported, the opening stays in the sy
 
 Every extracted field should support an evidence level:
 
-- LISTED: explicitly stated by the source or employer.
-- CALCULATED: deterministic conversion from listed facts.
-- INFERRED: reasonable interpretation that is not confirmed.
-- UNKNOWN: insufficient evidence.
+- LISTED - explicitly stated by the source or employer.
+- CALCULATED - deterministic conversion from listed facts.
+- INFERRED - reasonable interpretation that is not confirmed.
+- UNKNOWN - insufficient evidence.
 
-LMX must not invent missing hours, compensation, timezone overlap, or geographic eligibility.
+LMX must not invent missing hours, compensation, timezone overlap, geographic eligibility, or closure state.
