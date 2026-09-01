@@ -4,27 +4,35 @@ This directory is the working specification for LMX.
 
 LMX is designed as an event-driven market intelligence and personal opportunity tracking system. It combines continuous source ingestion, canonical entity resolution, historical analysis, real-time notifications, and a personal application workflow.
 
-The source registry is machine-readable and lives in `config/sources.yml`. Source names and crawl configuration should not be duplicated in Markdown.
+The external source registry is machine-readable and lives in `config/sources.yml`. Search/ranking policy lives separately under `config/profiles/`. Source names and crawl configuration should not be duplicated in Markdown.
 
-## Core product areas
+## Specification map
 
-- Market intelligence: hiring activity, vacancy lifetime, reopen/repost behavior, compensation trends, source distribution, skills, sectors, and geography.
-- Opportunity intelligence: ranking and factual normalization of opportunities for the current user.
-- Personal workflow: Kanban, list views, application stages, interactions, contacts, reminders, and history.
-- Real-time delivery: Telegram as the primary push surface for fresh or materially changed opportunities.
-- Agent-native access: MCP and API access for trusted humans, services, crawlers, parsers, and AI agents.
+- `vision.md` - product intent and separation of market state from personal state.
+- `product.md` - Telegram, web, Kanban, list, manual entry, ranking.
+- `domain.md` - canonical entities and invariants.
+- `bounded-contexts.md` - DDD boundaries and ownership.
+- `observations.md` - evidence, time semantics, absence/closure semantics.
+- `events.md` - commands, domain events, integration events, audit metadata.
+- `architecture.md` - end-to-end pipeline, Inbox/Outbox, projections, storage.
+- `interfaces.md` - API, MCP, agents, permissions, provenance.
+- `analytics.md` - lifecycle, compensation, source and demand intelligence.
+- `observability.md` - OpenTelemetry and operational source health.
+- `roadmap.md` - implementation order.
+- `decisions/` - accepted architectural decisions.
 
 ## Architectural principles
 
 1. A real hiring need is not the same thing as a posting on a website.
 2. A posting is not the same thing as the way LMX discovered it.
-3. Preserve raw observations and provenance before normalization.
-4. Domain state is changed through commands, not by direct database mutation from external actors.
-5. Accepted domain changes produce immutable domain events.
-6. Event Store records business truth. OpenTelemetry records system behavior.
-7. Every meaningful change is attributable to an actor, executor, source, and causal chain.
-8. Geography, compensation, employment type, and schedule are facts or explicitly labeled interpretations, not automatic rejection rules.
-9. Analytics should become more valuable as history accumulates. Start collecting history immediately.
-10. LLMs assist with ambiguous interpretation. Deterministic facts and metrics remain deterministic.
-
-See the other files in this directory for the domain model, architecture, analytics, interfaces, event model, and roadmap.
+3. A source observation is evidence, not automatically a domain mutation.
+4. Preserve raw observations and provenance before normalization.
+5. Domain state is changed through commands, not direct database mutation by external actors.
+6. Accepted domain changes produce immutable domain events.
+7. Event Store records business truth. OpenTelemetry records system behavior.
+8. Every meaningful change is attributable to principal, actor, executor, client, source, and causal chain where applicable.
+9. Geography, compensation, employment type, and schedule are facts or explicitly labeled interpretations, not automatic rejection rules.
+10. Identity resolution and merge decisions must be explainable and reversible.
+11. Absence from a source is evidence of absence, not automatic proof of closure.
+12. Analytics should become more valuable as history accumulates. Start collecting history immediately.
+13. LLMs assist with ambiguity. Deterministic facts and metrics remain deterministic.
