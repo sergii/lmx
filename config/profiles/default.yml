@@ -1,0 +1,49 @@
+version: 1
+
+# Search/ranking policy is intentionally separate from objective source metadata.
+
+source_priorities:
+  dou: { lane: local_fast, weight: 100 }
+  djinni: { lane: local_fast, weight: 100 }
+  work_ua: { lane: local_fast, weight: 100 }
+  robota_ua: { lane: local_fast, weight: 100 }
+  jooble: { lane: remote_specialized, weight: 70 }
+  remoteok: { lane: remote_specialized, weight: 80 }
+  remote_rails: { lane: remote_specialized, weight: 85 }
+  ruby_on_rails_jobs: { lane: remote_specialized, weight: 85 }
+  x: { lane: remote_specialized, weight: 65 }
+  hacker_news: { lane: remote_specialized, weight: 65 }
+  company_careers: { lane: remote_specialized, weight: 75 }
+  linkedin: { lane: broad_international, weight: 50 }
+  indeed: { lane: broad_international, weight: 45 }
+  wellfound: { lane: broad_international, weight: 50 }
+
+ranking:
+  opportunity_score:
+    description: Overall attractiveness independent of immediate application urgency.
+  action_priority:
+    description: Practical value of acting now.
+    factors:
+      - freshness
+      - source_priority
+      - application_friction
+      - current_geographic_eligibility
+      - likely_speed_to_dialogue
+      - hiring_funnel_length
+      - technical_fit
+
+policies:
+  compensation_hard_reject: false
+  geography_hard_reject: false
+  infer_job_coexistence: false
+  keep_relevant_low_score_observations: true
+  preserve_unknowns: true
+
+notification:
+  primary_surface: telegram
+  prefer_near_real_time_for:
+    - new_local_fast_opportunity
+    - high_action_priority
+    - material_posting_change
+    - compensation_change
+    - repost_or_reopen
