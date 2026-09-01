@@ -19,7 +19,11 @@ The external source registry is machine-readable and lives in `config/sources.ym
 - `analytics.md` - lifecycle, compensation, source and demand intelligence.
 - `observability.md` - OpenTelemetry and operational source health.
 - `roadmap.md` - implementation order.
+- `development/parallel-development.md` - branches, worktrees, package lanes, shared-file and migration rules for concurrent humans and agents.
+- `development/ownership.md` - semantic ownership, CODEOWNERS, Backstage and notification-routing model.
 - `decisions/` - accepted architectural decisions.
+
+Machine-readable semantic ownership lives in `config/ownership.yml`. GitHub review routing lives in `.github/CODEOWNERS`. Coding-agent repository instructions live in `AGENTS.md`.
 
 ## Architectural principles
 
@@ -36,3 +40,4 @@ The external source registry is machine-readable and lives in `config/sources.ym
 11. Absence from a source is evidence of absence, not automatic proof of closure.
 12. Analytics should become more valuable as history accumulates. Start collecting history immediately.
 13. LLMs assist with ambiguity. Deterministic facts and metrics remain deterministic.
+14. Package boundaries are also parallel-development boundaries: the repository should be understandable and safely changeable by independent human or agent sessions.
