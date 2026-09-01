@@ -1,0 +1,147 @@
+version: 1
+
+owners:
+  sergii:
+    kind: person
+    github: sergii
+    backstage: user:default/sergii
+    slack_channel: null
+
+components:
+  platform:
+    owner: sergii
+    bounded_context: Platform
+    paths:
+      - application/packs/platform/**
+    coordination: serialized_when_shared
+    owns:
+      - shared technical Rails primitives
+      - ApplicationRecord
+      - typed identifier infrastructure
+
+  workspace:
+    owner: sergii
+    bounded_context: Workspace
+    paths:
+      - application/packs/workspace/**
+    coordination: parallel
+    owns:
+      - workspace identity
+      - users and memberships
+      - tenant execution context
+      - workspace authorization boundary
+
+  acquisition:
+    owner: sergii
+    bounded_context: Acquisition
+    paths:
+      - application/packs/acquisition/**
+    coordination: parallel
+    owns:
+      - source acquisition
+      - source runs
+      - raw payloads
+      - ingestion records
+      - source observations
+
+  market_catalog:
+    owner: sergii
+    bounded_context: Market Catalog
+    paths:
+      - application/packs/market_catalog/**
+    coordination: parallel
+    owns:
+      - companies
+      - opening parties
+      - job openings
+      - job postings
+      - identity resolution
+      - market lifecycle
+
+  talent_profile:
+    owner: sergii
+    bounded_context: Talent Profile
+    paths:
+      - application/packs/talent_profile/**
+    coordination: parallel
+    owns:
+      - candidates
+      - candidate profile versions
+      - experience and skills
+      - candidate preferences
+      - candidate evidence
+
+  intelligence:
+    owner: sergii
+    bounded_context: Intelligence
+    paths:
+      - application/packs/intelligence/**
+    coordination: parallel_after_contracts
+    owns:
+      - match assessments
+      - opportunity scoring
+      - action priority
+      - derived interpretations
+
+  personal_crm:
+    owner: sergii
+    bounded_context: Personal CRM
+    paths:
+      - application/packs/personal_crm/**
+    coordination: parallel_after_contracts
+    owns:
+      - applications
+      - contacts and interactions
+      - interviews
+      - next actions
+      - interview preparation lifecycle
+
+  recruiting:
+    owner: sergii
+    bounded_context: Recruiting
+    paths:
+      - application/packs/recruiting/**
+    coordination: deferred
+    owns:
+      - recruiting engagements
+      - client recruiting workflows
+      - candidate presentations
+
+  delivery:
+    owner: sergii
+    bounded_context: Delivery
+    paths:
+      - application/packs/delivery/**
+    coordination: parallel_after_events
+    owns:
+      - Telegram delivery
+      - notification policy
+      - delivery attempts and status
+
+  integration:
+    owner: sergii
+    bounded_context: Integration
+    paths:
+      - application/packs/integration/**
+    coordination: parallel_contract_first
+    owns:
+      - API and MCP adapters
+      - external processor adapters
+      - agent provenance envelopes
+      - inbound and outbound integration boundaries
+
+shared:
+  owner: sergii
+  coordination: serialized
+  paths:
+    - application/Gemfile
+    - application/Gemfile.lock
+    - application/package.json
+    - application/package-lock.json
+    - application/config/application.rb
+    - application/config/routes.rb
+    - application/.github/workflows/**
+    - application/db/structure.sql
+    - application/app/assets/stylesheets/**
+    - spec/**
+    - config/**
