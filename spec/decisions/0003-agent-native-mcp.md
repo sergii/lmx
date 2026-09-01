@@ -12,12 +12,17 @@ Expose MCP as a first-class adapter to the same command/query application layer 
 
 All writes pass through authentication, authorization, Transactional Inbox/idempotency, domain rules, Event Store, and provenance metadata.
 
-Record actor separately from executor so an agent acting for a human remains auditable.
+Record security and business provenance separately where applicable:
+
+- principal/credential: authenticated identity used to access LMX
+- actor: logical initiator
+- executor: agent/component performing the action
+- client/interface: MCP client implementation
 
 ## Consequences
 
 - agents share one consistent domain contract
-- audit history identifies which client caused a change
+- audit history identifies which identity, client and actor caused a change
 - retries are safe
 - agent permissions can be scoped per tool/action
 - future agents can be added without changing the domain model
