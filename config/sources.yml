@@ -1,246 +1,274 @@
 version: 1
 
-# Canonical machine-readable source registry.
-# Source lists should not be duplicated in Markdown documentation.
+# Canonical machine-readable registry of external acquisition sources.
+# Personal ranking/search policy belongs in config/profiles/, not here.
 
 sources:
   - id: dou
     name: DOU Jobs
     base_url: https://jobs.dou.ua/
     enabled: true
-    tier: A
     market: ua
     kind: job_board
-    priority: 100
-    transports:
-      - type: http_scrape
+    acquisition:
+      - type: http_html
         preference: primary
         status: evaluate
-      - type: browser_crawl
+      - type: browser
         preference: fallback
         status: evaluate
+    access:
+      requires_auth: false
+      robots_review: pending
+      terms_review: pending
+      rate_limit: unknown
 
   - id: djinni
     name: Djinni
     base_url: https://djinni.co/
     enabled: true
-    tier: A
     market: ua
     kind: job_board
-    priority: 100
-    transports:
-      - type: http_scrape
+    acquisition:
+      - type: http_html
         preference: primary
         status: evaluate
-      - type: browser_crawl
+      - type: browser
         preference: fallback
         status: evaluate
+    access:
+      requires_auth: unknown
+      robots_review: pending
+      terms_review: pending
+      rate_limit: unknown
 
   - id: work_ua
     name: Work.ua
     base_url: https://www.work.ua/
     enabled: true
-    tier: A
     market: ua
     kind: job_board
-    priority: 100
-    transports:
-      - type: http_scrape
+    acquisition:
+      - type: http_html
         preference: primary
         status: evaluate
-      - type: browser_crawl
+      - type: browser
         preference: fallback
         status: evaluate
+    access:
+      requires_auth: false
+      robots_review: pending
+      terms_review: pending
+      rate_limit: unknown
 
   - id: robota_ua
     name: Robota.ua
     base_url: https://robota.ua/
     enabled: true
-    tier: A
     market: ua
     kind: job_board
-    priority: 100
-    transports:
-      - type: http_scrape
+    acquisition:
+      - type: http_html
         preference: primary
         status: evaluate
-      - type: browser_crawl
+      - type: browser
         preference: fallback
         status: evaluate
+    access:
+      requires_auth: false
+      robots_review: pending
+      terms_review: pending
+      rate_limit: unknown
 
   - id: jooble
     name: Jooble
     base_url: https://jooble.org/
     enabled: true
-    tier: B
     market: global
     kind: aggregator
-    priority: 70
     resolve_original_posting: true
-    transports:
-      - type: http_scrape
+    acquisition:
+      - type: http_html
         preference: primary
         status: evaluate
-      - type: browser_crawl
+      - type: browser
         preference: fallback
         status: evaluate
+    access:
+      requires_auth: false
+      robots_review: pending
+      terms_review: pending
+      rate_limit: unknown
 
   - id: remoteok
     name: Remote OK
     base_url: https://remoteok.com/
     enabled: true
-    tier: B
     market: global
     kind: remote_job_board
-    priority: 80
-    transports:
+    acquisition:
       - type: http_api
         preference: primary
         status: evaluate
-      - type: http_scrape
+      - type: http_html
         preference: fallback
         status: evaluate
+    access:
+      requires_auth: false
+      robots_review: pending
+      terms_review: pending
+      rate_limit: unknown
 
   - id: remote_rails
     name: Remote Rails
     base_url: https://www.remoterails.com/
     enabled: true
-    tier: B
     market: global
     kind: specialized_job_board
-    specialties:
-      - ruby
-      - rails
-    priority: 85
-    transports:
-      - type: http_scrape
+    specialties: [ruby, rails]
+    acquisition:
+      - type: http_html
         preference: primary
         status: evaluate
-      - type: browser_crawl
+      - type: browser
         preference: fallback
         status: evaluate
+    access:
+      requires_auth: false
+      robots_review: pending
+      terms_review: pending
+      rate_limit: unknown
 
   - id: ruby_on_rails_jobs
     name: RubyOnRailsJobs
     base_url: https://www.rubyonrailsjobs.com/
     enabled: true
-    tier: B
     market: global
     kind: specialized_job_board
-    specialties:
-      - ruby
-      - rails
-    priority: 85
-    transports:
-      - type: http_scrape
+    specialties: [ruby, rails]
+    acquisition:
+      - type: http_html
         preference: primary
         status: evaluate
+    access:
+      requires_auth: false
+      robots_review: pending
+      terms_review: pending
+      rate_limit: unknown
 
   - id: x
     name: X
     base_url: https://x.com/
     enabled: true
-    tier: B
     market: global
     kind: social_discovery
-    priority: 65
-    transports:
-      - type: browser_crawl
+    acquisition:
+      - type: browser
         preference: primary
         status: evaluate
+    access:
+      requires_auth: unknown
+      robots_review: pending
+      terms_review: pending
+      rate_limit: unknown
 
   - id: hacker_news
     name: Hacker News
     base_url: https://news.ycombinator.com/
     enabled: true
-    tier: B
     market: global
     kind: community_discovery
-    priority: 65
-    transports:
-      - type: http_scrape
+    acquisition:
+      - type: http_html
         preference: primary
         status: evaluate
+    access:
+      requires_auth: false
+      robots_review: pending
+      terms_review: pending
+      rate_limit: unknown
 
+  - id: linkedin
+    name: LinkedIn Jobs
+    base_url: https://www.linkedin.com/jobs/
+    enabled: true
+    market: global
+    kind: job_board
+    acquisition:
+      - type: browser
+        preference: primary
+        status: evaluate
+    access:
+      requires_auth: unknown
+      robots_review: pending
+      terms_review: pending
+      rate_limit: unknown
+
+  - id: indeed
+    name: Indeed
+    base_url: https://www.indeed.com/
+    enabled: true
+    market: global
+    kind: aggregator
+    resolve_original_posting: true
+    acquisition:
+      - type: http_html
+        preference: primary
+        status: evaluate
+      - type: browser
+        preference: fallback
+        status: evaluate
+    access:
+      requires_auth: false
+      robots_review: pending
+      terms_review: pending
+      rate_limit: unknown
+
+  - id: wellfound
+    name: Wellfound
+    base_url: https://wellfound.com/jobs
+    enabled: true
+    market: global
+    kind: job_board
+    acquisition:
+      - type: browser
+        preference: primary
+        status: evaluate
+    access:
+      requires_auth: unknown
+      robots_review: pending
+      terms_review: pending
+      rate_limit: unknown
+
+source_families:
   - id: company_careers
     name: Direct company career pages
-    base_url: null
+    kind: company_career
     enabled: true
-    tier: B
-    market: global
-    kind: distributed_career_pages
-    priority: 75
-    transports:
+    platforms:
+      - greenhouse
+      - lever
+      - ashby
+      - workable
+      - smartrecruiters
+      - custom
+    acquisition:
       - type: rss
         preference: opportunistic
         status: evaluate
       - type: http_api
         preference: opportunistic
         status: evaluate
-      - type: http_scrape
+      - type: http_html
         preference: primary
         status: evaluate
-      - type: browser_crawl
+      - type: browser
         preference: fallback
         status: evaluate
 
-  - id: linkedin
-    name: LinkedIn Jobs
-    base_url: https://www.linkedin.com/jobs/
-    enabled: true
-    tier: C
-    market: global
-    kind: job_board
-    priority: 50
-    transports:
-      - type: browser_crawl
-        preference: primary
-        status: evaluate
-
-  - id: indeed
-    name: Indeed
-    base_url: https://www.indeed.com/
-    enabled: true
-    tier: C
-    market: global
-    kind: aggregator
-    priority: 45
-    resolve_original_posting: true
-    transports:
-      - type: http_scrape
-        preference: primary
-        status: evaluate
-      - type: browser_crawl
-        preference: fallback
-        status: evaluate
-
-  - id: wellfound
-    name: Wellfound
-    base_url: https://wellfound.com/jobs
-    enabled: true
-    tier: C
-    market: global
-    kind: job_board
-    priority: 50
-    transports:
-      - type: browser_crawl
-        preference: primary
-        status: evaluate
-
-manual_ingestion:
-  enabled: true
-  transports:
-    - manual
-    - api_submission
-    - webhook
-    - import
-
-transport_types:
-  - rss
-  - http_api
-  - http_scrape
-  - browser_crawl
-  - webhook
-  - api_submission
+ingress_interfaces:
   - manual
+  - api
+  - webhook
+  - mcp
   - import
