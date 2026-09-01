@@ -11,12 +11,18 @@ openings.search
 openings.get
 postings.submit
 postings.get
-postings.update
+observations.submit
 companies.get
 companies.enrich
+candidates.get
+candidates.profile
+matches.get
+matches.assess
 applications.create
 applications.update
 applications.advance
+interviews.get
+interviews.prepare
 market.query
 ```
 
@@ -29,6 +35,9 @@ MCP is a first-class adapter into the same application command/query layer used 
 Expected clients include:
 
 - Grok Bot
+- OpenBot-style agents
+- P
+- Hermes
 - ChatGPT
 - Codex
 - Anthropic/Claude clients
@@ -39,12 +48,63 @@ MCP clients are not granted direct database access. Tools resolve to queries or 
 Conceptual flow:
 
 ```text
-Grok Bot -----+
-ChatGPT ------+
-Codex --------+--> LMX MCP --> application commands/queries --> domain
-Claude -------+
-custom agents +
+Grok Bot ------+
+OpenBot -------+
+P -------------+
+Hermes --------+
+ChatGPT -------+
+Codex ---------+--> LMX MCP --> application commands/queries --> domain
+Claude --------+
+custom agents -+
 ```
+
+## Two agent roles
+
+External agents can participate in LMX in two fundamentally different ways.
+
+### Agent as LMX client
+
+The agent uses LMX MCP/API to query or mutate the system within granted capabilities.
+
+Examples:
+
+- search the market
+- inspect a candidate profile
+- retrieve top MatchAssessments
+- create/advance an Application
+- inspect tomorrow's interview
+- request interview preparation
+- annotate evidence
+
+### Agent as external processor
+
+LMX or an external scheduler asks an agent to perform discovery, extraction, enrichment, or preliminary analysis.
+
+Examples:
+
+- retrieve a difficult source
+- extract structured vacancy data
+- enrich a company
+- infer likely technology/industry labels
+- produce a preliminary candidate/opening match
+- investigate vendor/end-client relationships
+
+Processor output returns to LMX as raw evidence, SourceObservations, enrichment records, or versioned preliminary assessments. It never becomes canonical state merely because an agent produced it.
+
+LMX remains the system of record for ontology, accepted domain facts, versioned assessments, application state, and audit history.
+
+## External processor invocation
+
+LMX may call external processors through:
+
+- HTTP APIs
+- queues/webhooks
+- purpose-built adapters
+- MCP when the external processor exposes a compatible MCP server
+
+This direction is separate from LMX exposing its own MCP server to agent clients.
+
+The invocation protocol can change without changing domain semantics.
 
 ## Ingress interfaces
 
@@ -60,10 +120,45 @@ Supported/planned ingress classes:
 
 All write-capable ingress interfaces converge on Transactional Inbox + application command handling.
 
+## Versioned agent analysis
+
+Any agent-assisted interpretation that influences later decisions should retain enough provenance to reproduce or compare it:
+
+- processor/agent identity
+- model/version when applicable
+- prompt/rules/profile version when applicable
+- input evidence/observation references
+- candidate profile version when candidate-specific
+- opening/evidence cutoff when opening-specific
+- confidence when meaningful
+- generated_at
+- structured output
+
+A rerun creates a new version. Historical analysis is not overwritten in place.
+
+## MatchAssessment through agents
+
+A MatchAssessment belongs to LMX even when an external agent helps produce it.
+
+The agent can calculate or suggest:
+
+- strengths
+- gaps
+- risks
+- recommendation
+- Opportunity Score inputs
+- Action Priority inputs
+- interview angles
+
+LMX stores the assessment with candidate-profile version, opening/evidence version, scoring-policy version, processor/model provenance, and evidence references.
+
+This means OpenBot/GrokBot/P/Hermes can be swapped or compared without losing the semantic continuity of the product.
+
 ## Provenance for agent actions
 
 Every write should record, where applicable:
 
+- workspace
 - principal
 - credential reference
 - actor
@@ -91,14 +186,28 @@ executor = agent:grok-scout
 client = mcp:grok-bot
 ```
 
+Example external processor result:
+
+```text
+actor = system:lmx
+executor = agent:hermes-worker
+client = adapter:hermes
+inputs = [observation_...]
+processor_version = ...
+```
+
 This makes multiple autonomous or semi-autonomous agents safe to audit and compare.
 
 ## Authorization
 
-Tool-level permissions should distinguish read, submit, annotate, update, application workflow, identity-resolution, and administrative operations. Agent identity alone should never imply unrestricted write access.
+Tool-level permissions should distinguish read, submit evidence, annotate, enrich, assess, update application workflow, prepare interviews, perform identity-resolution operations, and administer the workspace.
+
+Agent identity alone should never imply unrestricted write access.
 
 Identity-resolution operations such as merge, unlink, relink and merge-revert should use stricter permissions than ordinary annotation.
 
 ## Idempotency
 
 MCP and HTTP callers must supply or receive stable request/command identifiers for writes. Retries must not duplicate events or application actions.
+
+External processor invocation should also use stable job/invocation identifiers so retries can be distinguished from genuinely new analyses.
