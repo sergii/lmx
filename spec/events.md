@@ -9,13 +9,16 @@ Commands represent intent. Examples:
 ```text
 job_posting.submit
 job_posting.update
+job_posting.link_to_opening
+job_posting.unlink_from_opening
 job_opening.merge
+job_opening.revert_merge
 application.create
 application.advance
 company.enrich
 ```
 
-A command can be rejected by authorization, validation, idempotency, or domain rules.
+A command can be rejected by authentication, authorization, validation, idempotency, evidence policy, or domain rules.
 
 ## Domain events
 
@@ -25,10 +28,15 @@ Domain events represent accepted business facts. Examples:
 job_posting.discovered
 job_posting.updated
 job_posting.compensation_changed
-job_posting.disappeared
+job_posting.missing_observed
+job_posting.probably_closed
+job_posting.closed
 job_posting.reappeared
+job_posting.linked_to_opening
+job_posting.unlinked_from_opening
 job_opening.created
 job_opening.merged
+job_opening.merge_reverted
 job_opening.reopened
 application.created
 application.stage_changed
@@ -36,6 +44,8 @@ company.enriched
 ```
 
 Use past-tense facts for domain events. The distinction is intentional: `job_posting.update` is an instruction, while `job_posting.updated` is a fact.
+
+A source observation is not automatically a domain event. Evidence first enters the observation/reconciliation boundary.
 
 ## Integration events
 
@@ -57,37 +67,52 @@ Telemetry belongs in the observability stack, not the business Event Store.
 
 ## Audit and provenance
 
-Audit views are projections over immutable domain events and command metadata, not a separate mutable source of truth.
+Audit views are projections over immutable domain events, observation references, and command metadata, not a separate mutable source of truth.
 
 A useful audit entry can explain:
 
 - what changed
 - previous and new values when relevant
+- which evidence supported the change
 - who initiated the change
 - who executed it
-- which interface or adapter was used
+- which authenticated principal/credential was used
+- which client/interface or adapter was used
 - which command caused the event
 - which earlier event or observation caused the command
-- when it happened
+- when it happened and when it became effective
 
-## Actor and executor
+## Principal, actor, executor, client
 
-Actor and executor are separate concepts.
+Keep these concepts separate when applicable:
+
+- `principal` - authenticated security identity allowed to call the interface.
+- `credential` - credential/token/key reference used by the principal.
+- `actor` - logical initiator of the business intent.
+- `executor` - component or agent that performed the action on behalf of the actor.
+- `client` - interface/client implementation such as web, API, MCP, Grok Bot or ChatGPT.
 
 Examples:
 
 ```text
+principal: user:serhii
 actor: human:serhii
 executor: agent:chatgpt
+client: mcp:chatgpt
 ```
-
-or:
 
 ```text
-actor: crawler:source-adapter
-executor: system:normalizer
+principal: service:grok-scout
+actor: agent:grok-scout
+executor: agent:grok-scout
+client: mcp:grok-bot
 ```
 
-Actor types may include human, system, crawler, parser, agent, MCP client, API client, and integration.
+```text
+principal: system:acquisition
+actor: crawler:dou
+executor: parser:dou-v3
+client: acquisition:http-html
+```
 
-This distinction is essential when AI agents operate on behalf of humans.
+This distinction is essential when many autonomous or semi-autonomous agents operate on behalf of humans or services.
