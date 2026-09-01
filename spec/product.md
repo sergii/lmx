@@ -31,7 +31,7 @@ A dense sortable representation for finding the strongest opportunities. Useful 
 
 ### Opening detail
 
-Show the canonical opening, all known postings, historical snapshots, changes, source timeline, compensation observations, eligibility facts, score history, and personal application timeline.
+Show the canonical opening, all known postings, historical observations/snapshots, changes, source timeline, compensation observations, eligibility facts, score history, identity-resolution evidence where useful, and personal application timeline.
 
 ### Analytics
 
@@ -39,7 +39,7 @@ Market, companies, compensation, skills, sources, geography, hiring velocity, va
 
 ## Manual entry
 
-Manual input is a first-class ingestion path, not a fallback hack.
+Manual input is a first-class ingress path, not a fallback hack.
 
 Support both:
 
@@ -48,7 +48,7 @@ Support both:
 
 ## External submissions
 
-Expose an API so internal scripts, partners, bots, browser extensions, and agents can submit observations. API submissions enter the same inbox, command, provenance, event, and deduplication pipeline as every other source.
+Expose an API so internal scripts, partners, bots, browser extensions, and agents can submit observations or commands. External writes enter the same Inbox, provenance, command/event, and deduplication pipeline as other ingress interfaces.
 
 ## Ranking
 
@@ -57,6 +57,8 @@ Maintain two independent scores:
 - Opportunity Score: overall attractiveness of the opportunity.
 - Action Priority: urgency and practical value of acting now.
 
-Action Priority may consider freshness, source tier, application friction, current geographic eligibility, hiring funnel length, and likely speed to a real conversation.
+Action Priority may consider freshness, source priority/lane from the active profile, application friction, current geographic eligibility, hiring funnel length, and likely speed to a real conversation.
+
+Objective source metadata lives in `config/sources.yml`; personal ranking/search policy lives under `config/profiles/`.
 
 Do not use nominal compensation as a hard rejection rule. Do not infer whether a role can coexist with another job. Record factual schedule and employment information and let the user decide.
