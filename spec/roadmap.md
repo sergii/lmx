@@ -4,6 +4,8 @@
 
 Goal: start accumulating durable history before the full application architecture and UI are complete.
 
+The ordered implementation plan, dependencies, first-24-hours target, and completion gate live in [`phase-0-execution.md`](phase-0-execution.md).
+
 Day-one priority:
 
 - get the first highest-priority source observations into durable append-only storage
