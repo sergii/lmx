@@ -1,0 +1,18 @@
+# GitHub review routing for LMX.
+# Canonical semantic ownership lives in config/ownership.yml.
+
+* @sergii
+
+/spec/ @sergii
+/config/ @sergii
+
+/application/packs/platform/ @sergii
+/application/packs/workspace/ @sergii
+/application/packs/acquisition/ @sergii
+/application/packs/market_catalog/ @sergii
+/application/packs/talent_profile/ @sergii
+/application/packs/intelligence/ @sergii
+/application/packs/personal_crm/ @sergii
+/application/packs/recruiting/ @sergii
+/application/packs/delivery/ @sergii
+/application/packs/integration/ @sergii
