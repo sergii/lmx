@@ -57,7 +57,7 @@ sources:
     acquisition:
       - type: http_html
         preference: primary
-        status: evaluate
+        status: active
       - type: browser
         preference: fallback
         status: evaluate
