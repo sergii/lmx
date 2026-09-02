@@ -18,6 +18,15 @@ source_priorities:
   indeed: { lane: broad_international, weight: 45 }
   wellfound: { lane: broad_international, weight: 50 }
 
+acquisition:
+  # Sources that expose a complete feed do not need source queries here.
+  # Search-bound sources are collected once per query, with raw evidence kept per run.
+  source_queries:
+    work_ua:
+      - Ruby
+    robota_ua:
+      - Ruby
+
 ranking:
   opportunity_score:
     description: Overall attractiveness independent of immediate application urgency.
