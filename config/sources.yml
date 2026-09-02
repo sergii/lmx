@@ -118,7 +118,7 @@ sources:
     acquisition:
       - type: http_api
         preference: primary
-        status: evaluate
+        status: active
       - type: http_html
         preference: fallback
         status: evaluate
