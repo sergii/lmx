@@ -74,8 +74,11 @@ sources:
     market: ua
     kind: job_board
     acquisition:
-      - type: http_html
+      - type: http_api
         preference: primary
+        status: active
+      - type: http_html
+        preference: fallback
         status: evaluate
       - type: browser
         preference: fallback
