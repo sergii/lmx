@@ -11,9 +11,12 @@ sources:
     market: ua
     kind: job_board
     acquisition:
-      - type: http_html
+      - type: rss
         preference: primary
-        status: evaluate
+        status: active
+      - type: http_html
+        preference: fallback
+        status: active
       - type: browser
         preference: fallback
         status: evaluate
