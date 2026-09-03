@@ -26,6 +26,47 @@ notify
 
 MCP and API calls should participate in the same distributed trace and propagate correlation identifiers where practical.
 
+## Phase 0 acquisition trace contract
+
+Phase 0 uses a stable application-level trace contract rather than relying only on generic Rails or HTTP auto-instrumentation.
+
+Each collector execution starts a root span:
+
+```text
+lmx.acquisition.collect
+```
+
+with child spans where the work exists:
+
+```text
+lmx.acquisition.fetch
+lmx.acquisition.parse
+lmx.acquisition.observe
+```
+
+The collection span should expose low-cardinality operational attributes such as:
+
+- `lmx.source.id`
+- `lmx.source.transport`
+- `lmx.source.strategy`
+- `lmx.source.run_id` once the durable SourceRun exists
+- `lmx.source.search_present` as a boolean rather than the raw search string
+- `lmx.source.collector_version`
+- `lmx.source.adapter_version`
+- `lmx.source.parser_version`
+- `lmx.source.status`
+- `lmx.source.fetched_count`
+- `lmx.source.discovered_count`
+- `lmx.source.observed_count`
+
+Fetch spans may include the HTTP method, host, response status and transport. Parse spans should carry parser version and discovered count. Observe spans should carry observed count.
+
+Failures must mark the active span as failed and record the exception while the durable `SourceRun` remains the authoritative operational history. A successful zero-result run is not an error.
+
+Raw payload bodies, vacancy descriptions, credentials, authorization headers, personal search strings and other high-cardinality or sensitive content must not be copied into span attributes or events. Telemetry may reference durable IDs and bounded metadata instead.
+
+OTLP export is application configuration. Collector/domain code depends only on the OpenTelemetry API and remains vendor-neutral. When the SDK/exporter is disabled or not configured, instrumentation must degrade to a no-op without changing collector behavior.
+
 ## Metrics
 
 Candidate metrics:
