@@ -82,7 +82,7 @@ RSpec.describe PersonalCrm::Api, type: :model do
     end
   end
 
-  it "moves an ignored opening back to saved when an application attempt starts" do
+  it "moves an ignored opening back to saved and projects a new application attempt" do
     WorkspaceContext.with(organization, membership:) do
       described_class.ignore_opening(
         workspace_id: organization.typed_id,
@@ -91,7 +91,7 @@ RSpec.describe PersonalCrm::Api, type: :model do
         command: command("ignore-1")
       )
 
-      described_class.start_application(
+      result = described_class.start_application(
         workspace_id: organization.typed_id,
         candidate_id: candidate.fetch(:id),
         job_opening_id: opening.fetch(:id),
@@ -104,10 +104,16 @@ RSpec.describe PersonalCrm::Api, type: :model do
         job_opening_id: opening.fetch(:id)
       )
       attempt = context.fetch(:applications).first
+      projection = PersonalCrm::ApplicationProjection.find_by!(
+        organization_id: organization.id,
+        application_id: result.dig(:application, :id)
+      )
 
       expect(context.dig(:disposition, :state)).to eq("saved")
       expect(attempt.fetch(:stage)).to eq("applying")
       expect(attempt.fetch(:next_action)).to eq("Submit application")
+      expect(projection.stage).to eq("applying")
+      expect(projection.next_action).to eq("Submit application")
       expect(
         Platform::DomainEvent.where(
           event_type: [
@@ -139,9 +145,148 @@ RSpec.describe PersonalCrm::Api, type: :model do
       context = described_class.fetch_opening_context(**attributes)
       expect(context.fetch(:applications).size).to eq(2)
       expect(context.fetch(:applications).map { _1.fetch(:id) }.uniq.size).to eq(2)
+      expect(PersonalCrm::ApplicationProjection.where(organization_id: organization.id).count).to eq(2)
       expect(
         Platform::DomainEvent.where(event_type: described_class::APPLICATION_STARTED).count
       ).to eq(2)
+    end
+  end
+
+  it "treats application metadata as part of the idempotency payload" do
+    WorkspaceContext.with(organization, membership:) do
+      attributes = {
+        workspace_id: organization.typed_id,
+        candidate_id: candidate.fetch(:id),
+        job_opening_id: opening.fetch(:id)
+      }
+
+      described_class.start_application(
+        **attributes,
+        metadata: { "source" => "first" },
+        command: command("apply-metadata-1")
+      )
+
+      expect do
+        described_class.start_application(
+          **attributes,
+          metadata: { "source" => "second" },
+          command: command("apply-metadata-1")
+        )
+      end.to raise_error(PersonalCrm::Api::ContractViolation, /payload conflicts/i)
+    end
+  end
+
+  it "changes stage through an immutable event and keeps Opening Detail reduction current" do
+    WorkspaceContext.with(organization, membership:) do
+      application = described_class.start_application(
+        workspace_id: organization.typed_id,
+        candidate_id: candidate.fetch(:id),
+        job_opening_id: opening.fetch(:id),
+        command: command("apply-stage-1")
+      ).fetch(:application)
+
+      expect do
+        described_class.advance_application(
+          workspace_id: organization.typed_id,
+          application_id: application.fetch(:id),
+          stage: "applied",
+          command: command("advance-1")
+        )
+      end.to change(
+        Platform::DomainEvent.where(event_type: described_class::APPLICATION_STAGE_CHANGED), :count
+      ).by(1).and change(
+        Platform::OutboxMessage.where(message_type: described_class::APPLICATION_STAGE_CHANGED), :count
+      ).by(1)
+
+      projected = described_class.fetch_application(
+        workspace_id: organization.typed_id,
+        application_id: application.fetch(:id)
+      )
+      context = described_class.fetch_opening_context(
+        workspace_id: organization.typed_id,
+        candidate_id: candidate.fetch(:id),
+        job_opening_id: opening.fetch(:id)
+      )
+
+      expect(projected.fetch(:stage)).to eq("applied")
+      expect(projected.fetch(:applied_at)).to be_present
+      expect(context.dig(:applications, 0, :stage)).to eq("applied")
+      expect(context.dig(:applications, 0, :applied_at)).to be_present
+    end
+  end
+
+  it "updates the next action through an immutable event" do
+    WorkspaceContext.with(organization, membership:) do
+      application = described_class.start_application(
+        workspace_id: organization.typed_id,
+        candidate_id: candidate.fetch(:id),
+        job_opening_id: opening.fetch(:id),
+        command: command("apply-action-1")
+      ).fetch(:application)
+      due_at = 2.days.from_now.change(usec: 0)
+
+      described_class.set_next_action(
+        workspace_id: organization.typed_id,
+        application_id: application.fetch(:id),
+        next_action: "Follow up with recruiter",
+        next_action_at: due_at.iso8601,
+        command: command("next-action-1")
+      )
+
+      projected = described_class.fetch_application(
+        workspace_id: organization.typed_id,
+        application_id: application.fetch(:id)
+      )
+      context = described_class.fetch_opening_context(
+        workspace_id: organization.typed_id,
+        candidate_id: candidate.fetch(:id),
+        job_opening_id: opening.fetch(:id)
+      )
+
+      expect(projected.fetch(:next_action)).to eq("Follow up with recruiter")
+      expect(projected.fetch(:next_action_at)).to be_within(1.second).of(due_at)
+      expect(context.dig(:applications, 0, :next_action)).to eq("Follow up with recruiter")
+      expect(
+        Platform::DomainEvent.where(event_type: described_class::APPLICATION_NEXT_ACTION_CHANGED).count
+      ).to eq(1)
+    end
+  end
+
+  it "queries application projections by candidate and stage" do
+    WorkspaceContext.with(organization, membership:) do
+      first = described_class.start_application(
+        workspace_id: organization.typed_id,
+        candidate_id: candidate.fetch(:id),
+        job_opening_id: opening.fetch(:id),
+        command: command("apply-search-1")
+      ).fetch(:application)
+      second = described_class.start_application(
+        workspace_id: organization.typed_id,
+        candidate_id: candidate.fetch(:id),
+        job_opening_id: opening.fetch(:id),
+        command: command("apply-search-2")
+      ).fetch(:application)
+      described_class.advance_application(
+        workspace_id: organization.typed_id,
+        application_id: second.fetch(:id),
+        stage: "screening",
+        command: command("advance-search-1")
+      )
+
+      applying = described_class.search_applications(
+        workspace_id: organization.typed_id,
+        candidate_id: candidate.fetch(:id),
+        stages: [ "applying" ]
+      )
+      screening = described_class.search_applications(
+        workspace_id: organization.typed_id,
+        candidate_id: candidate.fetch(:id),
+        stages: [ "screening" ]
+      )
+
+      expect(applying.map { _1.fetch(:id) }).to eq([ first.fetch(:id) ])
+      expect(screening.map { _1.fetch(:id) }).to eq([ second.fetch(:id) ])
+      expect(described_class.application_stages).to include("applying", "screening", "offer")
     end
   end
 

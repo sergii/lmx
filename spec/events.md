@@ -13,8 +13,11 @@ job_posting.link_to_opening
 job_posting.unlink_from_opening
 job_opening.merge
 job_opening.revert_merge
-application.create
-application.advance
+personal_crm.save_opening
+personal_crm.ignore_opening
+personal_crm.start_application
+personal_crm.advance_application
+personal_crm.set_next_action
 company.enrich
 ```
 
@@ -38,12 +41,17 @@ job_opening.created
 job_opening.merged
 job_opening.merge_reverted
 job_opening.reopened
-application.created
-application.stage_changed
+personal_crm.opening.saved
+personal_crm.opening.ignored
+personal_crm.application.started
+personal_crm.application.stage_changed
+personal_crm.application.next_action_changed
 company.enriched
 ```
 
-Use past-tense facts for domain events. The distinction is intentional: `job_posting.update` is an instruction, while `job_posting.updated` is a fact.
+Use past-tense facts for domain events. The distinction is intentional: `job_posting.update` is an instruction, while `job_posting.updated` is a fact. Personal CRM follows the same rule: `personal_crm.advance_application` is intent, while `personal_crm.application.stage_changed` is an accepted fact.
+
+A Personal CRM opportunity stream groups workflow facts for one Candidate + JobOpening pair. Individual application attempts inside that stream keep independent `application_attempt` identities, so repeat applications remain valid.
 
 A source observation is not automatically a domain event. Evidence first enters the observation/reconciliation boundary.
 

@@ -10,4 +10,5 @@ metadata:
   owns:
     - OpeningDisposition
     - Application
+    - ApplicationProjection
     - personal opportunity workflow

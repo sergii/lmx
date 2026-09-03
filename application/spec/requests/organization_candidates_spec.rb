@@ -53,39 +53,6 @@ RSpec.describe "Organization candidate registry", type: :request do
     expect(response.body).not_to include(private_candidate.typed_id)
   end
 
-  it "shows the selected organization's applications on the pipeline board" do
-    sign_in users(:one)
-    post organizations_path, params: { name: "Pipeline Recruiting" }
-    job = create_job_for(Organization.last)
-
-    post candidates_path, params: {
-      first_name: "Grace", last_name: "Hopper", consent_status: "unknown", job_id: job.typed_id
-    }
-
-    get pipeline_path
-
-    expect(response).to have_http_status(:success)
-    expect(response.body).to include("Grace")
-    expect(response.body).to include("sourced")
-  end
-
-  it "moves an application and renders its job pipeline" do
-    sign_in users(:one)
-    post organizations_path, params: { name: "Move Recruiting" }
-    job = create_job_for(Organization.last)
-    post candidates_path, params: {
-      first_name: "Katherine", last_name: "Johnson", consent_status: "unknown", job_id: job.typed_id
-    }
-    application = Current.set(organization: Organization.last) { Application.for_organization(Organization.last).last }
-
-    patch application_path(application), params: { stage: "recruiter_screen", return_to: "pipeline" }
-
-    expect(response).to redirect_to(pipeline_path)
-    follow_redirect!
-    expect(response).to have_http_status(:success)
-    expect(response.body).to include("Katherine")
-  end
-
   it "fails closed when no organization context is set" do
     expect(Candidate.unscoped.count).to eq(0)
   end
