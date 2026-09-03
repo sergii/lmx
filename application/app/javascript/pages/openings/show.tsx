@@ -10,7 +10,8 @@ import {
   Send,
   Sparkles,
 } from "lucide-react"
-import { useState, type ReactNode } from "react"
+import type { ReactNode } from "react"
+import { useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
