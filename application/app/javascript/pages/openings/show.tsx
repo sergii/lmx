@@ -13,15 +13,12 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import AppLayout from "@/layouts/app-layout"
 
-type JsonValue =
-  string | number | boolean | null | JsonValue[] | Record<string, JsonValue>
-
 interface Company {
   id: string
   name: string
   website_url: string | null
   primary_domain: string | null
-  metadata: Record<string, JsonValue>
+  metadata: unknown
 }
 
 interface Opening {
@@ -34,7 +31,7 @@ interface Opening {
   location: string | null
   remote_policy: string | null
   compensation: string | null
-  metadata: Record<string, JsonValue>
+  metadata: unknown
   posting_count: number
   snapshot_count: number
 }
@@ -46,7 +43,7 @@ interface Party {
   confidence: number
   company: Company | null
   evidence: unknown
-  metadata: Record<string, JsonValue>
+  metadata: unknown
 }
 
 interface Snapshot {
@@ -54,11 +51,11 @@ interface Snapshot {
   source_observation_id: string
   observed_at: string | null
   presence_state: string
-  facts: Record<string, JsonValue>
+  facts: unknown
   content_digest: string
   normalizer_key: string
   normalizer_version: string
-  metadata: Record<string, JsonValue>
+  metadata: unknown
 }
 
 interface Posting {
@@ -73,7 +70,7 @@ interface Posting {
   first_seen_at: string | null
   last_confirmed_present_at: string | null
   missing_since: string | null
-  metadata: Record<string, JsonValue>
+  metadata: unknown
   changed: boolean
   history: Snapshot[]
 }
@@ -89,18 +86,18 @@ interface Assessment {
   version_number: number
   opportunity_score: number | null
   action_priority: number | null
-  score_details: Record<string, JsonValue>
-  strengths: JsonValue[]
-  gaps: JsonValue[]
-  risks: JsonValue[]
+  score_details: unknown
+  strengths: unknown[]
+  gaps: unknown[]
+  risks: unknown[]
   recommendation: string | null
-  interview_angles: JsonValue[]
-  evidence_references: JsonValue[]
+  interview_angles: unknown[]
+  evidence_references: unknown[]
   scoring_policy_version: string
-  processor: Record<string, JsonValue>
+  processor: unknown
   candidate_profile_version_id: string
   opening_evidence_cutoff: string | null
-  opening_snapshot: Record<string, JsonValue>
+  opening_snapshot: unknown
   generated_at: string | null
   stale: boolean
   stale_reasons: string[]
@@ -160,12 +157,12 @@ function lifecycleVariant(state: string) {
   return "default" as const
 }
 
-function displayValue(value: JsonValue) {
-  if (value === null) return "Unknown"
+function displayValue(value: unknown) {
+  if (value == null) return "Unknown"
   if (typeof value === "string") return value
   if (typeof value === "number" || typeof value === "boolean")
     return String(value)
-  return JSON.stringify(value)
+  return JSON.stringify(value) ?? "Unknown"
 }
 
 function Metric({
@@ -212,7 +209,7 @@ function JsonDetails({ label, value }: { label: string; value: unknown }) {
   )
 }
 
-function Insight({ title, items }: { title: string; items: JsonValue[] }) {
+function Insight({ title, items }: { title: string; items: unknown[] }) {
   return (
     <div className="border p-4">
       <div className="text-xs font-semibold tracking-wide uppercase">
