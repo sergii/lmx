@@ -294,8 +294,8 @@ module PersonalCrm
     private_class_method :validate_metadata!
 
     def opportunity_stream_id(candidate_id:, job_opening_id:)
-      digest = Digest::SHA256.hexdigest([candidate_id, job_opening_id].join("\0"))
-      uuid = [digest[0, 8], digest[8, 4], digest[12, 4], digest[16, 4], digest[20, 12]].join("-")
+      digest = Digest::SHA256.hexdigest([ candidate_id, job_opening_id ].join("\0"))
+      uuid = [ digest[0, 8], digest[8, 4], digest[12, 4], digest[16, 4], digest[20, 12] ].join("-")
       TypeID.from_uuid("opening_disposition", uuid).to_s
     end
     private_class_method :opportunity_stream_id
