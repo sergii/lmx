@@ -8,12 +8,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import AppLayout from "@/layouts/app-layout"
 
-type Source = {
+interface Source {
   key: string
   url: string | null
 }
 
-type Opening = {
+interface Opening {
   id: string
   title: string
   company: string | null
@@ -30,14 +30,14 @@ type Opening = {
   recommendation: string | null
 }
 
-type Candidate = {
+interface Candidate {
   id: string
   name: string
   profile_version_id: string | null
   profile_version_number: number | null
 }
 
-type Props = {
+interface Props {
   openings: Opening[]
   filters: {
     query: string | null
@@ -79,7 +79,7 @@ function relativeTime(value: string | null) {
 }
 
 function score(value: number | null) {
-  return value == null ? "—" : Math.round(value).toString()
+  return value == null ? "-" : Math.round(value).toString()
 }
 
 function lifecycleVariant(state: string) {
@@ -108,9 +108,11 @@ export default function OpeningsIndex({
   candidate,
   summary,
 }: Props) {
-  const hasFilters = Boolean(
-    filters.query || filters.lifecycle_state || filters.source_key,
-  )
+  const hasFilters = [
+    filters.query,
+    filters.lifecycle_state,
+    filters.source_key,
+  ].some(Boolean)
 
   return (
     <AppLayout breadcrumbs={[{ title: "Openings", href: "/openings" }]}>
