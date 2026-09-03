@@ -47,7 +47,7 @@ jobs:
       - name: Generate canonical PostgreSQL structure
         run: |
           bin/rails db:test:prepare
-          bin/rails db:migrate
+          bin/rails runner 'ActiveRecord::Base.connection_pool.migration_context.migrate'
           docker run --rm --network host \
             -e PGPASSWORD="$POSTGRES_PASSWORD" \
             postgres:18.4 \
