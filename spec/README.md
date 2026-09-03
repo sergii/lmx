@@ -13,6 +13,7 @@ The external source registry is machine-readable and lives in `config/sources.ym
 - `domain.md` - canonical entities and invariants.
 - `bounded-contexts.md` - DDD boundaries and ownership.
 - `observations.md` - evidence, time semantics, absence/closure semantics.
+- `source-catalog.md` - source taxonomy, coverage, lifecycle and Source Catalog × Search Profile planning semantics.
 - `events.md` - commands, domain events, integration events, audit metadata.
 - `architecture.md` - end-to-end pipeline, Inbox/Outbox, projections, storage.
 - `interfaces.md` - API, MCP, agents, permissions, provenance.

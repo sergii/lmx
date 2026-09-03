@@ -6,6 +6,37 @@
   "required": ["version", "source_priorities", "ranking", "policies"],
   "properties": {
     "version": { "type": "integer", "minimum": 1 },
+    "targets": {
+      "type": "object",
+      "properties": {
+        "domains": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "technologies": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "roles": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "industries": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "work_modes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
     "source_priorities": {
       "type": "object",
       "additionalProperties": {

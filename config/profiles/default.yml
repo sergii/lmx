@@ -1,6 +1,12 @@
 version: 1
 
 # Search/ranking policy is intentionally separate from objective source metadata.
+# Change targets as the career/search focus changes; source catalog facts stay stable.
+
+targets:
+  domains: [technology]
+  technologies: [ruby, rails]
+  roles: [software_engineer, backend_engineer]
 
 source_priorities:
   dou: { lane: local_fast, weight: 100 }
@@ -21,6 +27,7 @@ source_priorities:
 acquisition:
   # Sources that expose a complete feed do not need source queries here.
   # Search-bound sources are collected once per query, with raw evidence kept per run.
+  # These are operational query strings; targets above describe the durable search intent.
   source_queries:
     work_ua:
       - Ruby

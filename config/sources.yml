@@ -1,7 +1,7 @@
 version: 1
 
-# Canonical machine-readable registry of external acquisition sources.
-# Personal ranking/search policy belongs in config/profiles/, not here.
+# Canonical machine-readable catalog of external opportunity sources.
+# Source facts live here. Personal targets, ranking and query policy live in config/profiles/.
 
 sources:
   - id: dou
@@ -10,6 +10,11 @@ sources:
     enabled: true
     market: ua
     kind: job_board
+    coverage:
+      scope: focused
+      domains: [technology]
+    lifecycle:
+      status: active
     acquisition:
       - type: rss
         preference: primary
@@ -31,7 +36,12 @@ sources:
     base_url: https://djinni.co/
     enabled: true
     market: ua
-    kind: job_board
+    kind: recruiting_marketplace
+    coverage:
+      scope: focused
+      domains: [technology]
+    lifecycle:
+      status: active
     acquisition:
       - type: rss
         preference: primary
@@ -54,6 +64,10 @@ sources:
     enabled: true
     market: ua
     kind: job_board
+    coverage:
+      scope: general
+    lifecycle:
+      status: active
     acquisition:
       - type: http_html
         preference: primary
@@ -73,6 +87,10 @@ sources:
     enabled: true
     market: ua
     kind: job_board
+    coverage:
+      scope: general
+    lifecycle:
+      status: active
     acquisition:
       - type: http_api
         preference: primary
@@ -95,6 +113,10 @@ sources:
     enabled: true
     market: global
     kind: aggregator
+    coverage:
+      scope: general
+    lifecycle:
+      status: evaluating
     resolve_original_posting: true
     acquisition:
       - type: http_html
@@ -114,7 +136,12 @@ sources:
     base_url: https://remoteok.com/
     enabled: true
     market: global
-    kind: remote_job_board
+    kind: job_board
+    coverage:
+      scope: focused
+      work_modes: [remote]
+    lifecycle:
+      status: active
     acquisition:
       - type: http_api
         preference: primary
@@ -133,8 +160,13 @@ sources:
     base_url: https://www.remoterails.com/
     enabled: true
     market: global
-    kind: specialized_job_board
-    specialties: [ruby, rails]
+    kind: job_board
+    coverage:
+      scope: focused
+      technologies: [ruby, rails]
+      work_modes: [remote]
+    lifecycle:
+      status: evaluating
     acquisition:
       - type: http_html
         preference: primary
@@ -151,14 +183,19 @@ sources:
   - id: ruby_on_rails_jobs
     name: RubyOnRailsJobs
     base_url: https://www.rubyonrailsjobs.com/
-    enabled: true
+    enabled: false
     market: global
-    kind: specialized_job_board
-    specialties: [ruby, rails]
+    kind: job_board
+    coverage:
+      scope: focused
+      technologies: [ruby, rails]
+    lifecycle:
+      status: retired
+      reason: Service announced closure in 2026; retained for catalog and historical identity.
     acquisition:
       - type: http_html
         preference: primary
-        status: evaluate
+        status: disabled
     access:
       requires_auth: false
       robots_review: pending
@@ -170,7 +207,11 @@ sources:
     base_url: https://x.com/
     enabled: true
     market: global
-    kind: social_discovery
+    kind: social
+    coverage:
+      scope: general
+    lifecycle:
+      status: evaluating
     acquisition:
       - type: browser
         preference: primary
@@ -186,7 +227,12 @@ sources:
     base_url: https://news.ycombinator.com/
     enabled: true
     market: global
-    kind: community_discovery
+    kind: community
+    coverage:
+      scope: focused
+      domains: [technology]
+    lifecycle:
+      status: evaluating
     acquisition:
       - type: http_html
         preference: primary
@@ -203,6 +249,10 @@ sources:
     enabled: true
     market: global
     kind: job_board
+    coverage:
+      scope: general
+    lifecycle:
+      status: evaluating
     acquisition:
       - type: browser
         preference: primary
@@ -219,6 +269,10 @@ sources:
     enabled: true
     market: global
     kind: aggregator
+    coverage:
+      scope: general
+    lifecycle:
+      status: evaluating
     resolve_original_posting: true
     acquisition:
       - type: http_html
@@ -239,6 +293,10 @@ sources:
     enabled: true
     market: global
     kind: job_board
+    coverage:
+      scope: general
+    lifecycle:
+      status: evaluating
     acquisition:
       - type: browser
         preference: primary
@@ -254,6 +312,10 @@ source_families:
     name: Direct company career pages
     kind: company_career
     enabled: true
+    coverage:
+      scope: general
+    lifecycle:
+      status: evaluating
     platforms:
       - greenhouse
       - lever
