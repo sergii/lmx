@@ -18,20 +18,10 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-
           path = Path("application/packs/personal_crm/app/public/personal_crm/api.rb")
           text = path.read_text()
-          old = '''      command_executor.call(command_id: provenance.fetch(:command_id)) do
-                yield provenance
-              end.fetch(:result)
-          '''
-          new = '''      result = command_executor.call(command_id: provenance.fetch(:command_id)) do
-                yield provenance
-              end.fetch(:result)
-              deep_freeze(result.deep_symbolize_keys)
-          '''
-          if new in text:
-              raise SystemExit("result normalization already applied")
+          old = "      command_executor.call(command_id: provenance.fetch(:command_id)) do\n        yield provenance\n      end.fetch(:result)"
+          new = "      result = command_executor.call(command_id: provenance.fetch(:command_id)) do\n        yield provenance\n      end.fetch(:result)\n      deep_freeze(result.deep_symbolize_keys)"
           if old not in text:
               raise SystemExit("expected execute_command fragment not found")
           path.write_text(text.replace(old, new, 1))
