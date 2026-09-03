@@ -319,7 +319,9 @@ export default function OpeningShow({
               <>
                 <Button
                   type="button"
-                  variant={dispositionState === "saved" ? "secondary" : "outline"}
+                  variant={
+                    dispositionState === "saved" ? "secondary" : "outline"
+                  }
                   disabled={pendingAction !== null}
                   onClick={() => performAction("save")}
                 >
@@ -332,7 +334,9 @@ export default function OpeningShow({
                 </Button>
                 <Button
                   type="button"
-                  variant={dispositionState === "ignored" ? "secondary" : "outline"}
+                  variant={
+                    dispositionState === "ignored" ? "secondary" : "outline"
+                  }
                   disabled={pendingAction !== null}
                   onClick={() => performAction("ignore")}
                 >
@@ -422,7 +426,9 @@ export default function OpeningShow({
                     : "No profile version"}
                 </Row>
                 <Row label="Personal state">
-                  {dispositionState ? humanize(dispositionState) : "Not triaged"}
+                  {dispositionState
+                    ? humanize(dispositionState)
+                    : "Not triaged"}
                 </Row>
                 <Row label="Applications">{applications.length}</Row>
                 {latestApplication && (
@@ -460,7 +466,8 @@ export default function OpeningShow({
             <div>
               <h2 className="font-semibold">Application attempts</h2>
               <p className="text-muted-foreground mt-1 text-sm">
-                Each attempt is independent, so applying again later keeps the earlier history intact.
+                Each attempt is independent, so applying again later keeps the
+                earlier history intact.
               </p>
             </div>
             {applications.length === 0 ? (
@@ -472,13 +479,17 @@ export default function OpeningShow({
                 {applications.map((application) => (
                   <div key={application.id} className="bg-card border p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <Badge variant="outline">{humanize(application.stage)}</Badge>
+                      <Badge variant="outline">
+                        {humanize(application.stage)}
+                      </Badge>
                       <span className="text-muted-foreground text-xs">
                         {relativeTime(application.started_at)}
                       </span>
                     </div>
                     <div className="mt-3 text-sm">
-                      <span className="text-muted-foreground">Next action: </span>
+                      <span className="text-muted-foreground">
+                        Next action:{" "}
+                      </span>
                       {application.next_action ?? "None"}
                     </div>
                     {application.next_action_at && (
