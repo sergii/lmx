@@ -19,6 +19,7 @@ import {
   ArrowUpRight,
   CalendarClock,
   Columns3,
+  GripVertical,
   List,
   Search,
   Table2,
@@ -94,7 +95,11 @@ function lifecycleVariant(state: string) {
   return "default" as const
 }
 
-function ApplicationTitle({ application }: { application: ApplicationAttempt }) {
+function ApplicationTitle({
+  application,
+}: {
+  application: ApplicationAttempt
+}) {
   return (
     <div className="min-w-0">
       <Link
@@ -194,15 +199,18 @@ function ApplicationCard({
         isDragging && "opacity-40",
       )}
     >
-      <button
-        type="button"
-        {...attributes}
-        {...listeners}
-        aria-label={`Drag ${application.opening?.title ?? "application"}`}
-        className="mb-2 w-full cursor-grab text-left active:cursor-grabbing"
-      >
+      <div className="mb-2 flex items-start gap-2">
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label={`Drag ${application.opening?.title ?? "application"}`}
+          className="text-muted-foreground mt-0.5 cursor-grab active:cursor-grabbing"
+        >
+          <GripVertical className="size-4" />
+        </button>
         <ApplicationTitle application={application} />
-      </button>
+      </div>
 
       <div className="text-muted-foreground flex flex-wrap gap-x-2 gap-y-1 text-xs">
         <span>Started {relativeTime(application.started_at)}</span>
@@ -415,7 +423,9 @@ function ApplicationList({
                 <ApplicationTitle application={application} />
                 {application.opening && (
                   <Badge
-                    variant={lifecycleVariant(application.opening.lifecycle_state)}
+                    variant={lifecycleVariant(
+                      application.opening.lifecycle_state,
+                    )}
                   >
                     {humanize(application.opening.lifecycle_state)}
                   </Badge>
@@ -488,8 +498,12 @@ function ApplicationTable({
                     onMove={(stage) => onMove(application.id, stage)}
                   />
                 </td>
-                <td className="px-4 py-3">{dateTime(application.started_at)}</td>
-                <td className="px-4 py-3">{dateTime(application.applied_at)}</td>
+                <td className="px-4 py-3">
+                  {dateTime(application.started_at)}
+                </td>
+                <td className="px-4 py-3">
+                  {dateTime(application.applied_at)}
+                </td>
                 <td className="max-w-72 px-4 py-3">
                   {application.next_action ?? "-"}
                 </td>
@@ -663,8 +677,8 @@ export default function ApplicationsIndex({
 
             {cards.length === 0 && !query && (
               <div className="text-muted-foreground rounded-xl border border-dashed p-8 text-sm">
-                No application attempts yet. Open an opportunity and choose Apply
-                to start one.
+                No application attempts yet. Open an opportunity and choose
+                Apply to start one.
               </div>
             )}
 
