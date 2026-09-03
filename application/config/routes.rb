@@ -28,8 +28,8 @@ Rails.application.routes.draw do
     resource :sourcing_brief, only: %i[create update]
   end
   resources :job_postings, only: %i[create update]
-  resources :applications, only: :update
-  get :pipeline, to: "pipeline#index"
+  resources :applications, only: %i[index update]
+  get :pipeline, to: redirect("/applications?view=kanban")
   resources :candidates, only: %i[index new create show edit update]
   resources :interviews, only: %i[create show] do
     resources :assessments, only: :create, controller: "interview_assessments"
