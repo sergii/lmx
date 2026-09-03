@@ -190,8 +190,14 @@ jobs:
           cache-dependency-path: application/package-lock.json
       - name: Install JS dependencies
         run: npm ci
-      - name: Prepare PostgreSQL test schema
-        run: bin/rails db:test:prepare
+      - name: Generate canonical PostgreSQL structure
+        run: bin/rails db:migrate
+      - name: Upload generated structure
+        uses: actions/upload-artifact@v7
+        with:
+          name: personal-crm-structure
+          path: ${{ github.workspace }}/application/db/structure.sql
+          if-no-files-found: error
       - name: Run test suite, including the direct RLS boundary proof
         run: bin/rspec
       - name: Keep screenshots from failed system tests

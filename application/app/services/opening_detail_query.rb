@@ -14,13 +14,15 @@ class OpeningDetailQuery
   end
 
   def initialize(workspace_id:, user_id:, opening_id:, market_api: MarketCatalog::Api,
-    talent_api: TalentProfile::Api, intelligence_api: Intelligence::Api)
+    talent_api: TalentProfile::Api, intelligence_api: Intelligence::Api,
+    personal_crm_api: PersonalCrm::Api)
     @workspace_id = workspace_id
     @user_id = user_id
     @opening_id = opening_id
     @market_api = market_api
     @talent_api = talent_api
     @intelligence_api = intelligence_api
+    @personal_crm_api = personal_crm_api
     @companies = {}
   end
 
@@ -36,14 +38,15 @@ class OpeningDetailQuery
       parties: party_props(opening.fetch(:parties)),
       postings: posting_contexts.map { posting_props(_1) },
       candidate: candidate_props(candidate),
-      assessment: assessment_props(assessment, candidate:, opening:)
+      assessment: assessment_props(assessment, candidate:, opening:),
+      personal: personal_props(candidate, opening:)
     }
   end
 
   private
 
   attr_reader :workspace_id, :user_id, :opening_id, :market_api, :talent_api,
-    :intelligence_api, :companies
+    :intelligence_api, :personal_crm_api, :companies
 
   def opening_props(opening, posting_contexts:)
     documents = fact_documents(opening, posting_contexts)
@@ -171,6 +174,35 @@ class OpeningDetailQuery
       name: [ candidate[:first_name], candidate[:last_name] ].compact.join(" "),
       profile_version_id: candidate.dig(:profile_version, :id),
       profile_version_number: candidate.dig(:profile_version, :version_number)
+    }
+  end
+
+  def personal_props(candidate, opening:)
+    return { disposition: nil, application: nil } unless candidate
+
+    personal = personal_crm_api.fetch_opportunity(
+      workspace_id:,
+      candidate_id: candidate.fetch(:id),
+      job_opening_id: opening.fetch(:id)
+    )
+    disposition = personal[:disposition]
+    application = personal[:application]
+
+    {
+      disposition: disposition && {
+        id: disposition.fetch(:id),
+        state: disposition.fetch(:state),
+        changed_at: iso8601(disposition[:changed_at])
+      },
+      application: application && {
+        id: application.fetch(:id),
+        attempt_number: application.fetch(:attempt_number),
+        applied_at: iso8601(application[:applied_at]),
+        current_stage: application.fetch(:current_stage),
+        channel: application[:channel],
+        next_action: application[:next_action],
+        next_action_at: iso8601(application[:next_action_at])
+      }
     }
   end
 
