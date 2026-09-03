@@ -49,9 +49,9 @@ export default function PersonalActions({
             {state && <Badge variant="secondary">{state}</Badge>}
           </div>
           <p className="text-muted-foreground mt-1 max-w-2xl text-sm leading-relaxed">
-            Save and ignore are personal handling states. Mark applied only after
-            you actually submit an application; it records an LMX application
-            attempt and does not submit the employer form for you.
+            Save and ignore are personal handling states. Mark applied only
+            after you actually submit an application; it records an LMX
+            application attempt and does not submit the employer form for you.
           </p>
           {!candidatePresent && (
             <p className="text-destructive mt-2 text-sm">
