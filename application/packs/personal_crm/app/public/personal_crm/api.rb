@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "digest"
+
 module PersonalCrm
   module Api
     class Error < StandardError; end
@@ -10,6 +12,7 @@ module PersonalCrm
     OPENING_SAVED = "personal_crm.opening.saved"
     OPENING_IGNORED = "personal_crm.opening.ignored"
     APPLICATION_STARTED = "personal_crm.application.started"
+    AGGREGATE_TYPE = "personal_crm_opportunity"
 
     module_function
 
@@ -48,8 +51,10 @@ module PersonalCrm
     def start_application(workspace_id:, candidate_id:, job_opening_id:, command:,
       via_posting_id: nil, channel: nil, metadata: {},
       reliability_api: Platform::Reliability::Api,
-      command_executor: Platform::Reliability::CommandExecutor)
-      organization_id = workspace_uuid!(workspace_id)
+      command_executor: Platform::Reliability::CommandExecutor,
+      event_reader: Platform::Reliability::EventReader)
+      validate_workspace!(workspace_id)
+      validate_metadata!(metadata)
       payload = {
         workspace_id:,
         candidate_id:,
@@ -66,62 +71,88 @@ module PersonalCrm
         command_executor:
       ) do |provenance|
         validate_candidate_and_opening!(candidate_id:, job_opening_id:, via_posting_id:)
-        started_at = Time.current
-
-        disposition_change = SetOpeningDisposition.call(
-          organization_id:,
+        stream_id = opportunity_stream_id(candidate_id:, job_opening_id:)
+        context = context_from_events(
+          workspace_id:,
           candidate_id:,
           job_opening_id:,
-          state: "saved",
-          decided_at: started_at
+          events: event_reader.fetch(aggregate_type: AGGREGATE_TYPE, aggregate_id: stream_id)
         )
-        if disposition_change.fetch(:changed)
-          emit_disposition_event(
-            disposition_change:,
+        started_at = Time.current
+
+        if context.dig(:disposition, :state) != "saved"
+          append_event(
             event_type: OPENING_SAVED,
+            aggregate_id: stream_id,
+            effective_at: started_at,
+            data: disposition_event_data(
+              workspace_id:,
+              candidate_id:,
+              job_opening_id:,
+              state: "saved",
+              previous_state: context.dig(:disposition, :state),
+              decided_at: started_at
+            ),
             provenance:,
             reliability_api:
           )
         end
 
-        application = StartApplication.call(
-          organization_id:,
+        application = {
+          id: TypeID.from_uuid("application_attempt", SecureRandom.uuid).to_s,
+          workspace_id:,
           candidate_id:,
           job_opening_id:,
           via_posting_id:,
+          stage: "applying",
           started_at:,
-          channel:,
-          metadata:
+          applied_at: nil,
+          channel: optional_string(channel),
+          next_action: "Submit application",
+          next_action_at: nil,
+          metadata: metadata.deep_dup
+        }.compact
+        append_event(
+          event_type: APPLICATION_STARTED,
+          aggregate_id: stream_id,
+          effective_at: started_at,
+          data: application,
+          provenance:,
+          reliability_api:
         )
-        emit_application_started(application:, provenance:, reliability_api:)
 
-        {
-          disposition: disposition_snapshot(disposition_change.fetch(:disposition)),
-          application: application_snapshot(application)
-        }.freeze
+        deep_freeze(
+          disposition: disposition_snapshot(
+            workspace_id:,
+            candidate_id:,
+            job_opening_id:,
+            stream_id:,
+            state: "saved",
+            decided_at: started_at
+          ),
+          application:
+        )
       end
-    rescue ActiveRecord::RecordInvalid, ArgumentError => error
-      raise InvalidInput, error.message
     rescue Platform::Reliability::Api::Error => error
       raise ContractViolation, "reliability boundary rejected Personal CRM command: #{error.message}"
     end
 
-    def fetch_opening_context(workspace_id:, candidate_id:, job_opening_id:)
-      organization_id = workspace_uuid!(workspace_id)
-      disposition = OpeningDisposition.find_by(organization_id:, candidate_id:, job_opening_id:)
-      applications = Application
-        .where(organization_id:, candidate_id:, job_opening_id:)
-        .order(started_at: :desc, created_at: :desc, id: :desc)
-
-      deep_freeze(
-        disposition: disposition && disposition_snapshot(disposition),
-        applications: applications.map { application_snapshot(_1) }
+    def fetch_opening_context(workspace_id:, candidate_id:, job_opening_id:,
+      event_reader: Platform::Reliability::EventReader)
+      validate_workspace!(workspace_id)
+      stream_id = opportunity_stream_id(candidate_id:, job_opening_id:)
+      context_from_events(
+        workspace_id:,
+        candidate_id:,
+        job_opening_id:,
+        events: event_reader.fetch(aggregate_type: AGGREGATE_TYPE, aggregate_id: stream_id)
       )
     end
 
     def execute_disposition_command(workspace_id:, candidate_id:, job_opening_id:, state:,
-      event_type:, command_name:, command:, reliability_api:, command_executor:)
-      organization_id = workspace_uuid!(workspace_id)
+      event_type:, command_name:, command:, reliability_api:, command_executor:,
+      event_reader: Platform::Reliability::EventReader)
+      validate_workspace!(workspace_id)
       payload = { workspace_id:, candidate_id:, job_opening_id:, state: }
 
       execute_command(
@@ -132,25 +163,43 @@ module PersonalCrm
         command_executor:
       ) do |provenance|
         validate_candidate_and_opening!(candidate_id:, job_opening_id:)
-        change = SetOpeningDisposition.call(
-          organization_id:,
+        stream_id = opportunity_stream_id(candidate_id:, job_opening_id:)
+        context = context_from_events(
+          workspace_id:,
           candidate_id:,
           job_opening_id:,
-          state:
+          events: event_reader.fetch(aggregate_type: AGGREGATE_TYPE, aggregate_id: stream_id)
         )
-        if change.fetch(:changed)
-          emit_disposition_event(
-            disposition_change: change,
+        previous_state = context.dig(:disposition, :state)
+        decided_at = Time.current
+
+        if previous_state != state
+          append_event(
             event_type:,
+            aggregate_id: stream_id,
+            effective_at: decided_at,
+            data: disposition_event_data(
+              workspace_id:,
+              candidate_id:,
+              job_opening_id:,
+              state:,
+              previous_state:,
+              decided_at:
+            ),
             provenance:,
             reliability_api:
           )
         end
 
-        disposition_snapshot(change.fetch(:disposition))
+        disposition_snapshot(
+          workspace_id:,
+          candidate_id:,
+          job_opening_id:,
+          stream_id:,
+          state:,
+          decided_at: previous_state == state ? context.dig(:disposition, :decided_at) : decided_at
+        )
       end
-    rescue ActiveRecord::RecordInvalid, ArgumentError => error
-      raise InvalidInput, error.message
     rescue Platform::Reliability::Api::Error => error
       raise ContractViolation, "reliability boundary rejected Personal CRM command: #{error.message}"
     end
@@ -225,61 +274,55 @@ module PersonalCrm
     end
     private_class_method :validate_candidate_and_opening!
 
-    def emit_disposition_event(disposition_change:, event_type:, provenance:, reliability_api:)
-      disposition = disposition_change.fetch(:disposition)
-      data = {
-        disposition_id: disposition.typed_id,
-        candidate_id: disposition.candidate_id,
-        job_opening_id: disposition.job_opening_id,
-        previous_state: disposition_change[:previous_state],
-        state: disposition.state,
-        decided_at: disposition.decided_at
+    def validate_workspace!(workspace_id)
+      typed_id = TypeID.from_string(workspace_id.to_s)
+      raise InvalidInput, "workspace_id must be an org TypeID" unless typed_id.prefix == "org"
+
+      current = ActiveRecord::Base.connection.select_value(
+        "SELECT current_setting('app.current_organization', true)"
+      )
+      raise InvalidInput, "workspace database scope is required" if current.blank?
+      raise InvalidInput, "workspace_id does not match the database scope" unless current == typed_id.uuid.to_s
+    rescue TypeID::Error
+      raise InvalidInput, "workspace_id must be an org TypeID"
+    end
+    private_class_method :validate_workspace!
+
+    def validate_metadata!(metadata)
+      raise InvalidInput, "metadata must be an object" unless metadata.is_a?(Hash)
+    end
+    private_class_method :validate_metadata!
+
+    def opportunity_stream_id(candidate_id:, job_opening_id:)
+      digest = Digest::SHA256.hexdigest([candidate_id, job_opening_id].join("\0"))
+      uuid = [digest[0, 8], digest[8, 4], digest[12, 4], digest[16, 4], digest[20, 12]].join("-")
+      TypeID.from_uuid("opening_disposition", uuid).to_s
+    end
+    private_class_method :opportunity_stream_id
+
+    def disposition_event_data(workspace_id:, candidate_id:, job_opening_id:, state:,
+      previous_state:, decided_at:)
+      {
+        workspace_id:,
+        candidate_id:,
+        job_opening_id:,
+        state:,
+        previous_state:,
+        decided_at:
       }
-      append_event(
-        event_type:,
-        aggregate_type: "personal_crm_opening_disposition",
-        aggregate_id: disposition.typed_id,
-        effective_at: disposition.decided_at,
-        data:,
-        provenance:,
-        reliability_api:
-      )
     end
-    private_class_method :emit_disposition_event
+    private_class_method :disposition_event_data
 
-    def emit_application_started(application:, provenance:, reliability_api:)
-      data = {
-        application_id: application.typed_id,
-        candidate_id: application.candidate_id,
-        job_opening_id: application.job_opening_id,
-        via_posting_id: application.via_posting_id,
-        stage: application.stage,
-        started_at: application.started_at,
-        next_action: application.next_action
-      }.compact
-      append_event(
-        event_type: APPLICATION_STARTED,
-        aggregate_type: "personal_crm_application",
-        aggregate_id: application.typed_id,
-        effective_at: application.started_at,
-        data:,
-        provenance:,
-        reliability_api:
-      )
-    end
-    private_class_method :emit_application_started
-
-    def append_event(event_type:, aggregate_type:, aggregate_id:, effective_at:, data:, provenance:,
-      reliability_api:)
+    def append_event(event_type:, aggregate_id:, effective_at:, data:, provenance:, reliability_api:)
       occurred_at = Time.current
       expected_version = Platform::Reliability::AggregateVersion.call(
-        aggregate_type:,
+        aggregate_type: AGGREGATE_TYPE,
         aggregate_id:
       )
       reliability_api.append_domain_event(
         event_type:,
         event_version: 1,
-        aggregate_type:,
+        aggregate_type: AGGREGATE_TYPE,
         aggregate_id:,
         expected_aggregate_version: expected_version,
         occurred_at:,
@@ -307,53 +350,67 @@ module PersonalCrm
     end
     private_class_method :append_event
 
-    def workspace_uuid!(workspace_id)
-      typed_id = TypeID.from_string(workspace_id.to_s)
-      raise InvalidInput, "workspace_id must be an org TypeID" unless typed_id.prefix == "org"
+    def context_from_events(workspace_id:, candidate_id:, job_opening_id:, events:)
+      disposition = nil
+      applications = []
 
-      current = ActiveRecord::Base.connection.select_value(
-        "SELECT current_setting('app.current_organization', true)"
-      )
-      raise InvalidInput, "workspace database scope is required" if current.blank?
-      raise InvalidInput, "workspace_id does not match the database scope" unless current == typed_id.uuid.to_s
+      events.each do |event|
+        data = event.fetch(:data).deep_symbolize_keys
+        case event.fetch(:event_type)
+        when OPENING_SAVED, OPENING_IGNORED
+          disposition = disposition_snapshot(
+            workspace_id:,
+            candidate_id:,
+            job_opening_id:,
+            stream_id: event.fetch(:aggregate_id),
+            state: data.fetch(:state),
+            decided_at: data[:decided_at] || event[:effective_at] || event.fetch(:occurred_at)
+          )
+        when APPLICATION_STARTED
+          disposition = disposition_snapshot(
+            workspace_id:,
+            candidate_id:,
+            job_opening_id:,
+            stream_id: event.fetch(:aggregate_id),
+            state: "saved",
+            decided_at: event[:effective_at] || event.fetch(:occurred_at)
+          )
+          applications << application_snapshot(data, event:)
+        end
+      end
 
-      typed_id.uuid.to_s
-    rescue TypeID::Error
-      raise InvalidInput, "workspace_id must be an org TypeID"
+      deep_freeze(disposition:, applications: applications.reverse)
     end
-    private_class_method :workspace_uuid!
+    private_class_method :context_from_events
 
-    def disposition_snapshot(disposition)
+    def disposition_snapshot(workspace_id:, candidate_id:, job_opening_id:, stream_id:, state:, decided_at:)
       {
-        id: disposition.typed_id,
-        workspace_id: TypeID.from_uuid("org", disposition.organization_id).to_s,
-        candidate_id: disposition.candidate_id,
-        job_opening_id: disposition.job_opening_id,
-        state: disposition.state,
-        decided_at: disposition.decided_at,
-        created_at: disposition.created_at,
-        updated_at: disposition.updated_at
-      }.freeze
+        id: stream_id,
+        workspace_id:,
+        candidate_id:,
+        job_opening_id:,
+        state:,
+        decided_at:
+      }
     end
     private_class_method :disposition_snapshot
 
-    def application_snapshot(application)
+    def application_snapshot(data, event:)
       {
-        id: application.typed_id,
-        workspace_id: TypeID.from_uuid("org", application.organization_id).to_s,
-        candidate_id: application.candidate_id,
-        job_opening_id: application.job_opening_id,
-        via_posting_id: application.via_posting_id,
-        stage: application.stage,
-        started_at: application.started_at,
-        applied_at: application.applied_at,
-        channel: application.channel,
-        next_action: application.next_action,
-        next_action_at: application.next_action_at,
-        metadata: deep_freeze(application.metadata.deep_dup),
-        created_at: application.created_at,
-        updated_at: application.updated_at
-      }.freeze
+        id: data.fetch(:id),
+        workspace_id: data.fetch(:workspace_id),
+        candidate_id: data.fetch(:candidate_id),
+        job_opening_id: data.fetch(:job_opening_id),
+        via_posting_id: data[:via_posting_id],
+        stage: data.fetch(:stage),
+        started_at: data.fetch(:started_at),
+        applied_at: data[:applied_at],
+        channel: data[:channel],
+        next_action: data[:next_action],
+        next_action_at: data[:next_action_at],
+        metadata: data.fetch(:metadata, {}),
+        event_id: event.fetch(:id)
+      }
     end
     private_class_method :application_snapshot
 
