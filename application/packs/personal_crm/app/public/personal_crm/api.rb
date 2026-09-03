@@ -68,7 +68,8 @@ module PersonalCrm
         candidate_id:,
         job_opening_id:,
         via_posting_id:,
-        channel:
+        channel:,
+        metadata: metadata.deep_dup
       }.compact
 
       execute_command(
@@ -87,8 +88,10 @@ module PersonalCrm
           events: event_reader.fetch(aggregate_type: AGGREGATE_TYPE, aggregate_id: stream_id)
         )
         started_at = Time.current
+        was_saved = context.dig(:disposition, :state) == "saved"
+        decided_at = was_saved ? context.dig(:disposition, :decided_at) : started_at
 
-        if context.dig(:disposition, :state) != "saved"
+        unless was_saved
           append_event(
             event_type: OPENING_SAVED,
             aggregate_id: stream_id,
@@ -141,7 +144,7 @@ module PersonalCrm
             job_opening_id:,
             stream_id:,
             state: "saved",
-            decided_at: started_at
+            decided_at:
           ),
           application: application_projection_snapshot(projected_application)
         )
@@ -553,14 +556,16 @@ module PersonalCrm
             decided_at: data[:decided_at] || event[:effective_at] || event.fetch(:occurred_at)
           )
         when APPLICATION_STARTED
-          disposition = disposition_snapshot(
-            workspace_id:,
-            candidate_id:,
-            job_opening_id:,
-            stream_id: event.fetch(:aggregate_id),
-            state: "saved",
-            decided_at: event[:effective_at] || event.fetch(:occurred_at)
-          )
+          unless disposition&.dig(:state) == "saved"
+            disposition = disposition_snapshot(
+              workspace_id:,
+              candidate_id:,
+              job_opening_id:,
+              stream_id: event.fetch(:aggregate_id),
+              state: "saved",
+              decided_at: event[:effective_at] || event.fetch(:occurred_at)
+            )
+          end
           applications << application_snapshot(data, event:)
         when APPLICATION_STAGE_CHANGED
           application = applications.find { _1.fetch(:id) == data.fetch(:application_id) }
@@ -603,7 +608,7 @@ module PersonalCrm
         job_opening_id: data.fetch(:job_opening_id),
         via_posting_id: data[:via_posting_id],
         stage: data.fetch(:stage),
-        started_at: data.fetch(:started_at),
+        started_at: event[:effective_at] || event.fetch(:occurred_at),
         applied_at: data[:applied_at],
         channel: data[:channel],
         next_action: data[:next_action],
