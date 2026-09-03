@@ -24,6 +24,7 @@ Rails.application.routes.draw do
   resources :openings, only: %i[index show] do
     post :actions, to: "opening_actions#create", on: :member
   end
+  resource :profile, only: %i[show update], controller: "candidate_profile"
   resources :jobs, only: %i[index create show update] do
     resource :sourcing_brief, only: %i[create update]
   end
