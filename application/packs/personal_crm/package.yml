@@ -1,4 +1,12 @@
 enforce_dependencies: strict
-dependencies: []
+enforce_privacy: true
+dependencies:
+  - packs/platform
+  - packs/market_catalog
+  - packs/talent_profile
 metadata:
   bounded_context: personal_crm
+  owns:
+    - OpeningDisposition
+    - Application
+    - personal opportunity workflow
