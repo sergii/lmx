@@ -152,6 +152,30 @@ RSpec.describe PersonalCrm::Api, type: :model do
     end
   end
 
+  it "treats application metadata as part of the idempotency payload" do
+    WorkspaceContext.with(organization, membership:) do
+      attributes = {
+        workspace_id: organization.typed_id,
+        candidate_id: candidate.fetch(:id),
+        job_opening_id: opening.fetch(:id)
+      }
+
+      described_class.start_application(
+        **attributes,
+        metadata: { "source" => "first" },
+        command: command("apply-metadata-1")
+      )
+
+      expect do
+        described_class.start_application(
+          **attributes,
+          metadata: { "source" => "second" },
+          command: command("apply-metadata-1")
+        )
+      end.to raise_error(PersonalCrm::Api::ContractViolation, /payload conflicts/i)
+    end
+  end
+
   it "changes stage through an immutable event and keeps Opening Detail reduction current" do
     WorkspaceContext.with(organization, membership:) do
       application = described_class.start_application(
