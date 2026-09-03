@@ -150,15 +150,25 @@ Opportunity Score and Action Priority remain separate concepts:
 - Opportunity Score - overall attractiveness and fit.
 - Action Priority - how much attention the opportunity deserves now, considering freshness, source friction, eligibility, likely speed to a real conversation, and other time-sensitive factors.
 
+### OpeningDisposition
+
+The current personal triage state for one Candidate + JobOpening pair.
+
+Phase 1 states are `saved` and `ignored`. This state belongs to Personal CRM and must never mutate the canonical JobOpening lifecycle.
+
+Disposition history is represented by immutable Personal CRM events. Starting an Application makes the effective disposition `saved`, because an opening with an active application cannot simultaneously remain ignored.
+
 ### Application
 
 One concrete application attempt by a Candidate related to a JobOpening, optionally through a specific JobPosting.
 
-Do not enforce one permanent Application per candidate/opening. The same opening can reopen, or the same candidate can apply again through a different path months later.
+Every attempt has its own stable `application_attempt` identity. Do not enforce one permanent Application per candidate/opening. The same opening can reopen, or the same candidate can apply again through a different path months later.
 
-Useful fields include candidate_id, job_opening_id, via_posting_id, applied time, current personal stage, source/channel, next action, and next-action time.
+Useful state includes candidate_id, job_opening_id, via_posting_id, started/applied time, current personal stage, source/channel, next action, and next-action time.
 
-Application stage history should be represented by immutable domain events/projections rather than destructive status replacement without history.
+The authoritative history of an Application attempt is immutable Personal CRM domain events. Current stage, applied time, next action, and next-action time are projections of that history rather than independently authoritative mutable facts.
+
+A Candidate + JobOpening opportunity stream may group disposition events and several independent Application attempts for efficient causal ordering. The stream identity does not replace Application identity.
 
 ### Interaction
 
@@ -200,8 +210,10 @@ Company ── OpeningParty ── JobOpening
                               │      └── SourceObservations
                               │
 Candidate ───────────────── MatchAssessment
+   │                          │
+   ├── OpeningDisposition ─── JobOpening
    │
-   └── Applications ── JobOpening
+   └── Applications ───────── JobOpening
           ├── Interactions
           ├── Contacts
           └── Interviews
