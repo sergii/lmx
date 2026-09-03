@@ -1,13 +1,16 @@
-import { Head, Link } from "@inertiajs/react"
+import { Head, Link, router } from "@inertiajs/react"
 import { format, formatDistanceToNowStrict } from "date-fns"
 import {
   ArrowLeft,
   ArrowUpRight,
+  Ban,
+  Bookmark,
   Database,
   History,
+  Send,
   Sparkles,
 } from "lucide-react"
-import type { ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -103,6 +106,28 @@ interface Assessment {
   stale_reasons: string[]
 }
 
+interface OpeningDisposition {
+  id: string
+  state: "saved" | "ignored"
+  decided_at: string | null
+}
+
+interface ApplicationAttempt {
+  id: string
+  via_posting_id: string | null
+  stage: string
+  started_at: string | null
+  applied_at: string | null
+  channel: string | null
+  next_action: string | null
+  next_action_at: string | null
+}
+
+interface PersonalCrmContext {
+  disposition: OpeningDisposition | null
+  applications: ApplicationAttempt[]
+}
+
 interface Props {
   opening: Opening
   company: Company | null
@@ -110,6 +135,7 @@ interface Props {
   postings: Posting[]
   candidate: Candidate | null
   assessment: Assessment | null
+  personal_crm: PersonalCrmContext | null
 }
 
 const sourceLabels: Record<string, string> = {
@@ -235,7 +261,25 @@ export default function OpeningShow({
   postings,
   candidate,
   assessment,
+  personal_crm,
 }: Props) {
+  const [pendingAction, setPendingAction] = useState<string | null>(null)
+  const dispositionState = personal_crm?.disposition?.state ?? null
+  const applications = personal_crm?.applications ?? []
+  const latestApplication = applications[0] ?? null
+
+  function performAction(kind: "save" | "ignore" | "apply") {
+    setPendingAction(kind)
+    router.post(
+      `/openings/${opening.id}/actions`,
+      { kind, idempotency_key: crypto.randomUUID() },
+      {
+        preserveScroll: true,
+        onFinish: () => setPendingAction(null),
+      },
+    )
+  }
+
   return (
     <AppLayout
       breadcrumbs={[
@@ -268,14 +312,59 @@ export default function OpeningShow({
               {opening.remote_policy && <span>{opening.remote_policy}</span>}
             </div>
           </div>
-          {company?.website_url && (
-            <Button asChild variant="outline">
-              <a href={company.website_url} target="_blank" rel="noreferrer">
-                Company site
-                <ArrowUpRight className="size-4" />
-              </a>
-            </Button>
-          )}
+
+          <div className="flex flex-wrap gap-2">
+            {candidate && (
+              <>
+                <Button
+                  type="button"
+                  variant={dispositionState === "saved" ? "secondary" : "outline"}
+                  disabled={pendingAction !== null}
+                  onClick={() => performAction("save")}
+                >
+                  <Bookmark className="size-4" />
+                  {pendingAction === "save"
+                    ? "Saving..."
+                    : dispositionState === "saved"
+                      ? "Saved"
+                      : "Save"}
+                </Button>
+                <Button
+                  type="button"
+                  variant={dispositionState === "ignored" ? "secondary" : "outline"}
+                  disabled={pendingAction !== null}
+                  onClick={() => performAction("ignore")}
+                >
+                  <Ban className="size-4" />
+                  {pendingAction === "ignore"
+                    ? "Ignoring..."
+                    : dispositionState === "ignored"
+                      ? "Ignored"
+                      : "Ignore"}
+                </Button>
+                <Button
+                  type="button"
+                  disabled={pendingAction !== null}
+                  onClick={() => performAction("apply")}
+                >
+                  <Send className="size-4" />
+                  {pendingAction === "apply"
+                    ? "Starting..."
+                    : applications.length > 0
+                      ? "Apply again"
+                      : "Apply"}
+                </Button>
+              </>
+            )}
+            {company?.website_url && (
+              <Button asChild variant="outline">
+                <a href={company.website_url} target="_blank" rel="noreferrer">
+                  Company site
+                  <ArrowUpRight className="size-4" />
+                </a>
+              </Button>
+            )}
+          </div>
         </header>
 
         <div className="bg-border grid gap-px overflow-hidden border sm:grid-cols-2 xl:grid-cols-4">
@@ -331,6 +420,21 @@ export default function OpeningShow({
                     ? `v${candidate.profile_version_number}`
                     : "No profile version"}
                 </Row>
+                <Row label="Personal state">
+                  {dispositionState ? humanize(dispositionState) : "Not triaged"}
+                </Row>
+                <Row label="Applications">{applications.length}</Row>
+                {latestApplication && (
+                  <>
+                    <Row label="Latest attempt">
+                      {humanize(latestApplication.stage)} · started{" "}
+                      {relativeTime(latestApplication.started_at)}
+                    </Row>
+                    <Row label="Next action">
+                      {latestApplication.next_action ?? "None"}
+                    </Row>
+                  </>
+                )}
                 <Row label="Assessment">
                   {assessment
                     ? `v${assessment.version_number}`
@@ -349,6 +453,47 @@ export default function OpeningShow({
             )}
           </section>
         </div>
+
+        {candidate && (
+          <section className="space-y-4">
+            <div>
+              <h2 className="font-semibold">Application attempts</h2>
+              <p className="text-muted-foreground mt-1 text-sm">
+                Each attempt is independent, so applying again later keeps the earlier history intact.
+              </p>
+            </div>
+            {applications.length === 0 ? (
+              <div className="text-muted-foreground border border-dashed p-6 text-sm">
+                No application attempt has been started for this opening.
+              </div>
+            ) : (
+              <div className="grid gap-3 lg:grid-cols-2">
+                {applications.map((application) => (
+                  <div key={application.id} className="bg-card border p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <Badge variant="outline">{humanize(application.stage)}</Badge>
+                      <span className="text-muted-foreground text-xs">
+                        {relativeTime(application.started_at)}
+                      </span>
+                    </div>
+                    <div className="mt-3 text-sm">
+                      <span className="text-muted-foreground">Next action: </span>
+                      {application.next_action ?? "None"}
+                    </div>
+                    {application.next_action_at && (
+                      <div className="text-muted-foreground mt-1 text-xs">
+                        Due {dateTime(application.next_action_at)}
+                      </div>
+                    )}
+                    <div className="text-muted-foreground mt-3 text-xs break-all">
+                      {application.id}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         <section className="space-y-4">
           <div>
