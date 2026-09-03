@@ -2,11 +2,11 @@
 
 Donor: `sergii/a322043jkf844f93mrfff`
 
-Adoption workbench: donor branch `lmx/adoption`.
+Historical adoption workbench: donor branch `lmx/adoption`.
 
 ## Keep
 
-These foundations are useful to LMX and should survive adoption with only naming/configuration cleanup:
+These foundations are useful to LMX and survived adoption with only naming/configuration cleanup:
 
 - Rails 8.1 / Ruby 4 baseline
 - PostgreSQL
@@ -27,13 +27,13 @@ These foundations are useful to LMX and should survive adoption with only naming
 ## Keep as a design pattern, redesign as LMX domain
 
 - `Candidate` - remains a first-class LMX entity; a User can be linked to a Candidate but candidates do not need user accounts
-- pipeline/Kanban interaction machinery - reuse frontend interaction patterns, replace staffing card semantics
+- pipeline/Kanban/list/table interaction machinery - reuse frontend interaction patterns, replace staffing card semantics and persistence
 - `SourcingBrief` - salvage as SearchProfile/OpportunityProfile ideas
 - `Evidence` - preserve the evidence-first pattern and confidence/provenance semantics
 - AI/manual/final assessment separation - reuse for derived LMX interpretation
 - `Interview`, transcripts, notes, recordings and assessment patterns - reuse for Personal CRM / InterviewPrep loop
-- `ApplicationStageEvent` idea - evolve toward domain events / projections
-- append-only `AuditEvent` intuition - replace with Event Store + audit projection
+- `ApplicationStageEvent` idea - realized as immutable Personal CRM domain events plus rebuildable projections
+- append-only `AuditEvent` intuition - replaced by Event Store + audit projections
 
 ## Replace
 
@@ -43,6 +43,7 @@ These foundations are useful to LMX and should survive adoption with only naming
 - mutable posting `content_snapshot` as history -> RawPayload + SourceObservation + normalized snapshots
 - implicit tenant `default_scope` -> explicit `WorkspaceContext.with(...)` + PostgreSQL RLS
 - staffing `ClientCompany -> Project -> Job` as the semantic core -> Company + OpeningParty + JobOpening, with optional RecruitingEngagement for agency workflows
+- donor root-shell `PipelineController` / `ApplicationsController` direct ActiveRecord access -> composition over published Personal CRM and Market Catalog APIs
 
 ## Remove from the adopted baseline
 
@@ -65,25 +66,21 @@ These may be useful after the personal LMX loop works and should not be deleted 
 
 They can return through the Personal CRM or optional Recruiting bounded contexts instead of controlling Market Catalog semantics.
 
-## Portability debt to remove before subtree import
+## Historical portability debt resolved during adoption
+
+The adoption workbench removed or isolated:
 
 - machine-local `enforceable` Gem path and associated donor-only test wiring
 - `ReactStarterKit`, `react_starter_kit`, and `hire_do*` legacy names
 - unused JS dependencies left after ReUI/Gantt removal
-- deployment placeholders that still describe the donor
+- deployment placeholders that described the donor
 
 ## Adoption status
 
-Started on 2026-09-01.
+Adoption started on 2026-09-01 and is complete.
 
-Completed on `lmx/adoption` so far:
+The canonical snapshot from donor `lmx/adoption` was imported into `sergii/lmx/application/`. The donor `main` branch remains the frozen original snapshot, and the donor adoption branch is archival.
 
-- removed ReUI/Gantt source surface and Gantt route/navigation
-- removed `components.json` registry configuration
-- introduced explicit `WorkspaceContext.with(...)`
-- removed `OrganizationScoped` default scope while retaining automatic organization assignment and DB RLS boundary
-- moved request tenant setup through `WorkspaceContext`
-- renamed the Rails application module to `Lmx`
-- created initial modular-monolith package skeleton for Workspace, Acquisition, Market Catalog, Talent Profile, Intelligence, Personal CRM, Recruiting, Delivery and Integration
+The canonical application now includes explicit `WorkspaceContext.with(...)`, PostgreSQL RLS, the `Lmx` application module, Packwerk package boundaries, canonical Market Catalog/Talent Profile/Intelligence foundations, and Personal CRM opening/application workflow based on transactional commands and immutable domain events.
 
-The donor `main` branch remains unchanged.
+Future implementation work happens only in `sergii/lmx`. Donor UI code may still be consulted as a design reference, but donor domain models and controllers are not an implementation authority.
