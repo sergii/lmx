@@ -128,10 +128,10 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - name: Install packages
-        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y build-essential git node-gyp pkg-config python-is-python3 google-chrome-stable
       - name: Checkout code
         uses: actions/checkout@v7
+      - name: Install packages
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y build-essential git node-gyp pkg-config python-is-python3 google-chrome-stable
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
