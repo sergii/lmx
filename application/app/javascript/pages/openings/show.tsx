@@ -1,13 +1,7 @@
 import { Head, Link } from "@inertiajs/react"
 import { format, formatDistanceToNowStrict } from "date-fns"
-import {
-  ArrowLeft,
-  ArrowUpRight,
-  Database,
-  History,
-  Sparkles,
-  UserRound,
-} from "lucide-react"
+import { ArrowLeft, ArrowUpRight, Database, History, Sparkles } from "lucide-react"
+import type { ReactNode } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -19,16 +13,14 @@ type JsonValue =
   | boolean
   | null
   | JsonValue[]
-  | JsonRecord
-
-interface JsonRecord extends Record<string, JsonValue> {}
+  | Record<string, JsonValue>
 
 interface Company {
   id: string
   name: string
   website_url: string | null
   primary_domain: string | null
-  metadata: JsonRecord
+  metadata: Record<string, JsonValue>
 }
 
 interface Opening {
@@ -41,7 +33,7 @@ interface Opening {
   location: string | null
   remote_policy: string | null
   compensation: string | null
-  metadata: JsonRecord
+  metadata: Record<string, JsonValue>
   posting_count: number
   snapshot_count: number
 }
@@ -53,7 +45,7 @@ interface Party {
   confidence: number
   company: Company | null
   evidence: JsonValue
-  metadata: JsonRecord
+  metadata: Record<string, JsonValue>
 }
 
 interface Snapshot {
@@ -61,15 +53,11 @@ interface Snapshot {
   source_observation_id: string
   observed_at: string | null
   presence_state: string
-  title: string | null
-  source_published_at: string | null
-  source_updated_at: string | null
-  facts: JsonRecord
+  facts: Record<string, JsonValue>
   content_digest: string
   normalizer_key: string
   normalizer_version: string
-  metadata: JsonRecord
-  created_at: string | null
+  metadata: Record<string, JsonValue>
 }
 
 interface Posting {
@@ -81,12 +69,10 @@ interface Posting {
   canonical_url: string | null
   application_url: string | null
   publisher: Company | null
-  source_published_at: string | null
-  source_updated_at: string | null
   first_seen_at: string | null
   last_confirmed_present_at: string | null
   missing_since: string | null
-  metadata: JsonRecord
+  metadata: Record<string, JsonValue>
   changed: boolean
   history: Snapshot[]
 }
@@ -94,7 +80,6 @@ interface Posting {
 interface Candidate {
   id: string
   name: string
-  profile_version_id: string | null
   profile_version_number: number | null
 }
 
@@ -103,7 +88,7 @@ interface Assessment {
   version_number: number
   opportunity_score: number | null
   action_priority: number | null
-  score_details: JsonRecord
+  score_details: Record<string, JsonValue>
   strengths: JsonValue[]
   gaps: JsonValue[]
   risks: JsonValue[]
@@ -111,12 +96,11 @@ interface Assessment {
   interview_angles: JsonValue[]
   evidence_references: JsonValue[]
   scoring_policy_version: string
-  processor: JsonRecord
+  processor: Record<string, JsonValue>
   candidate_profile_version_id: string
   opening_evidence_cutoff: string | null
-  opening_snapshot: JsonRecord
+  opening_snapshot: Record<string, JsonValue>
   generated_at: string | null
-  created_at: string | null
   stale: boolean
   stale_reasons: string[]
 }
@@ -159,42 +143,36 @@ function score(value: number | null) {
 }
 
 function dateTime(value: string | null) {
-  if (!value) return "Unknown"
-
-  return format(new Date(value), "MMM d, yyyy · HH:mm")
+  return value ? format(new Date(value), "MMM d, yyyy · HH:mm") : "Unknown"
 }
 
 function relativeTime(value: string | null) {
-  if (!value) return "Unknown"
-
-  return formatDistanceToNowStrict(new Date(value), { addSuffix: true })
+  return value
+    ? formatDistanceToNowStrict(new Date(value), { addSuffix: true })
+    : "Unknown"
 }
 
 function lifecycleVariant(state: string) {
   if (state === "closed") return "secondary" as const
-  if (state === "missing" || state === "probably_closed") {
-    return "outline" as const
-  }
+  if (state === "missing" || state === "probably_closed") return "outline" as const
   return "default" as const
 }
 
 function displayValue(value: JsonValue) {
   if (value === null) return "Unknown"
   if (typeof value === "string") return value
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value)
-  }
+  if (typeof value === "number" || typeof value === "boolean") return String(value)
   return JSON.stringify(value)
 }
 
-function MetricCard({
+function Metric({
   label,
   value,
-  description,
+  note,
 }: {
   label: string
   value: string | number
-  description?: string
+  note?: string
 }) {
   return (
     <div className="bg-card border px-4 py-4">
@@ -202,20 +180,12 @@ function MetricCard({
         {label}
       </div>
       <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
-      {description && (
-        <div className="text-muted-foreground mt-1 text-xs">{description}</div>
-      )}
+      {note && <div className="text-muted-foreground mt-1 text-xs">{note}</div>}
     </div>
   )
 }
 
-function DetailRow({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
+function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid gap-1 border-b py-3 last:border-b-0 sm:grid-cols-[150px_1fr] sm:gap-4">
       <div className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
@@ -239,26 +209,16 @@ function JsonDetails({ label, value }: { label: string; value: JsonValue }) {
   )
 }
 
-function InsightList({
-  title,
-  items,
-  emptyLabel,
-}: {
-  title: string
-  items: JsonValue[]
-  emptyLabel: string
-}) {
+function Insight({ title, items }: { title: string; items: JsonValue[] }) {
   return (
     <div className="border p-4">
       <div className="text-xs font-semibold tracking-wide uppercase">{title}</div>
       {items.length === 0 ? (
-        <p className="text-muted-foreground mt-3 text-sm">{emptyLabel}</p>
+        <p className="text-muted-foreground mt-3 text-sm">None recorded.</p>
       ) : (
         <ul className="mt-3 space-y-2 text-sm">
           {items.map((item, index) => (
-            <li key={`${title}-${index}`} className="leading-relaxed">
-              {displayValue(item)}
-            </li>
+            <li key={`${title}-${index}`}>{displayValue(item)}</li>
           ))}
         </ul>
       )}
@@ -284,31 +244,26 @@ export default function OpeningShow({
       <Head title={opening.title} />
 
       <div className="space-y-6 p-6">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0">
+        <header className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div>
             <Button asChild variant="ghost" size="sm" className="-ml-3 mb-3">
               <Link href="/openings">
                 <ArrowLeft className="size-4" />
                 Back to openings
               </Link>
             </Button>
-
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-semibold tracking-tight">
-                {opening.title}
-              </h1>
+              <h1 className="text-2xl font-semibold tracking-tight">{opening.title}</h1>
               <Badge variant={lifecycleVariant(opening.lifecycle_state)}>
                 {humanize(opening.lifecycle_state)}
               </Badge>
             </div>
-
-            <div className="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            <div className="text-muted-foreground mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm">
               <span>{company?.name ?? "Unknown company"}</span>
               {opening.location && <span>{opening.location}</span>}
               {opening.remote_policy && <span>{opening.remote_policy}</span>}
             </div>
           </div>
-
           {company?.website_url && (
             <Button asChild variant="outline">
               <a href={company.website_url} target="_blank" rel="noreferrer">
@@ -317,21 +272,21 @@ export default function OpeningShow({
               </a>
             </Button>
           )}
-        </div>
+        </header>
 
         <div className="grid gap-px overflow-hidden border bg-border sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard
+          <Metric
             label="Opportunity score"
             value={score(assessment?.opportunity_score ?? null)}
-            description={assessment ? `Assessment v${assessment.version_number}` : "Not assessed"}
+            note={assessment ? `Assessment v${assessment.version_number}` : "Not assessed"}
           />
-          <MetricCard
+          <Metric
             label="Action priority"
             value={score(assessment?.action_priority ?? null)}
-            description={assessment?.stale ? "Assessment may need refresh" : undefined}
+            note={assessment?.stale ? "Assessment may need refresh" : undefined}
           />
-          <MetricCard label="Sources" value={opening.posting_count} />
-          <MetricCard label="Evidence snapshots" value={opening.snapshot_count} />
+          <Metric label="Sources" value={opening.posting_count} />
+          <Metric label="Evidence snapshots" value={opening.snapshot_count} />
         </div>
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
@@ -340,161 +295,82 @@ export default function OpeningShow({
               <Database className="size-4" />
               <h2 className="font-semibold">Canonical opening</h2>
             </div>
-
             <div className="mt-4">
-              <DetailRow label="Company">
-                {company?.name ?? "Unknown company"}
-                {company?.primary_domain && (
-                  <span className="text-muted-foreground ml-2 text-xs">
-                    {company.primary_domain}
-                  </span>
-                )}
-              </DetailRow>
-              <DetailRow label="Compensation">
-                {opening.compensation ?? "Unknown"}
-              </DetailRow>
-              <DetailRow label="Location">{opening.location ?? "Unknown"}</DetailRow>
-              <DetailRow label="Remote policy">
-                {opening.remote_policy ?? "Unknown"}
-              </DetailRow>
-              <DetailRow label="First seen">
-                {dateTime(opening.first_seen_at)}
-              </DetailRow>
-              <DetailRow label="Last seen">
-                {dateTime(opening.last_seen_at)}
-              </DetailRow>
-              {opening.closed_at && (
-                <DetailRow label="Closed">{dateTime(opening.closed_at)}</DetailRow>
-              )}
+              <Row label="Company">{company?.name ?? "Unknown company"}</Row>
+              <Row label="Compensation">{opening.compensation ?? "Unknown"}</Row>
+              <Row label="Location">{opening.location ?? "Unknown"}</Row>
+              <Row label="Remote policy">{opening.remote_policy ?? "Unknown"}</Row>
+              <Row label="First seen">{dateTime(opening.first_seen_at)}</Row>
+              <Row label="Last seen">{dateTime(opening.last_seen_at)}</Row>
+              {opening.closed_at && <Row label="Closed">{dateTime(opening.closed_at)}</Row>}
             </div>
-
             <JsonDetails label="Canonical metadata" value={opening.metadata} />
           </section>
 
           <section className="bg-card border p-5">
-            <div className="flex items-center gap-2">
-              <UserRound className="size-4" />
-              <h2 className="font-semibold">Personal context</h2>
-            </div>
-
+            <h2 className="font-semibold">Personal context</h2>
             {candidate ? (
               <div className="mt-4">
-                <DetailRow label="Candidate">{candidate.name}</DetailRow>
-                <DetailRow label="Current profile">
+                <Row label="Candidate">{candidate.name}</Row>
+                <Row label="Current profile">
                   {candidate.profile_version_number
                     ? `v${candidate.profile_version_number}`
                     : "No profile version"}
-                </DetailRow>
-                <DetailRow label="Assessment">
-                  {assessment ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span>v{assessment.version_number}</span>
-                      <Badge variant={assessment.stale ? "outline" : "secondary"}>
-                        {assessment.stale ? "Needs refresh" : "Current"}
-                      </Badge>
-                    </div>
-                  ) : (
-                    "Not assessed"
-                  )}
-                </DetailRow>
+                </Row>
+                <Row label="Assessment">
+                  {assessment ? `v${assessment.version_number}` : "Not assessed"}
+                </Row>
                 {assessment?.stale && (
-                  <DetailRow label="Why stale">
-                    {assessment.stale_reasons.join(", ")}
-                  </DetailRow>
+                  <Row label="Needs refresh">{assessment.stale_reasons.join(", ")}</Row>
                 )}
               </div>
             ) : (
-              <p className="text-muted-foreground mt-4 text-sm leading-relaxed">
-                No canonical Candidate is linked to this user yet. Market evidence
-                remains available without personal scoring.
+              <p className="text-muted-foreground mt-4 text-sm">
+                No canonical Candidate is linked to this user yet.
               </p>
             )}
           </section>
         </div>
 
         <section className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <Sparkles className="size-4" />
-                <h2 className="font-semibold">Latest match assessment</h2>
-              </div>
-              <p className="text-muted-foreground mt-1 text-sm">
-                Versioned derived intelligence against an exact candidate profile
-                and opening evidence cutoff.
-              </p>
+          <div>
+            <div className="flex items-center gap-2">
+              <Sparkles className="size-4" />
+              <h2 className="font-semibold">Latest match assessment</h2>
             </div>
             {assessment?.generated_at && (
-              <div className="text-muted-foreground text-xs">
+              <p className="text-muted-foreground mt-1 text-sm">
                 Generated {relativeTime(assessment.generated_at)}
-              </div>
+              </p>
             )}
           </div>
 
           {assessment ? (
             <div className="bg-card border p-5">
               {assessment.recommendation && (
-                <p className="max-w-4xl text-sm leading-relaxed">
-                  {assessment.recommendation}
-                </p>
+                <p className="max-w-4xl text-sm leading-relaxed">{assessment.recommendation}</p>
               )}
-
               <div className="mt-5 grid gap-3 lg:grid-cols-3">
-                <InsightList
-                  title="Strengths"
-                  items={assessment.strengths}
-                  emptyLabel="No strengths recorded."
-                />
-                <InsightList
-                  title="Gaps"
-                  items={assessment.gaps}
-                  emptyLabel="No gaps recorded."
-                />
-                <InsightList
-                  title="Risks"
-                  items={assessment.risks}
-                  emptyLabel="No risks recorded."
-                />
+                <Insight title="Strengths" items={assessment.strengths} />
+                <Insight title="Gaps" items={assessment.gaps} />
+                <Insight title="Risks" items={assessment.risks} />
               </div>
-
-              <div className="mt-5">
-                <InsightList
-                  title="Interview angles"
-                  items={assessment.interview_angles}
-                  emptyLabel="No interview angles recorded."
-                />
+              <div className="mt-3">
+                <Insight title="Interview angles" items={assessment.interview_angles} />
               </div>
-
               <div className="mt-5 grid gap-3 lg:grid-cols-2">
                 <div className="border p-4 text-sm">
-                  <div className="text-xs font-semibold tracking-wide uppercase">
-                    Assessment provenance
-                  </div>
-                  <div className="mt-3 space-y-2">
-                    <div>
-                      <span className="text-muted-foreground">Profile version: </span>
-                      {assessment.candidate_profile_version_id}
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Evidence cutoff: </span>
-                      {dateTime(assessment.opening_evidence_cutoff)}
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Scoring policy: </span>
-                      {assessment.scoring_policy_version}
-                    </div>
-                  </div>
+                  <Row label="Profile version">{assessment.candidate_profile_version_id}</Row>
+                  <Row label="Evidence cutoff">{dateTime(assessment.opening_evidence_cutoff)}</Row>
+                  <Row label="Scoring policy">{assessment.scoring_policy_version}</Row>
                   <JsonDetails label="Processor" value={assessment.processor} />
                 </div>
-
                 <div className="border p-4 text-sm">
                   <div className="text-xs font-semibold tracking-wide uppercase">
                     Evidence references
                   </div>
                   {assessment.evidence_references.length === 0 ? (
-                    <p className="text-muted-foreground mt-3">
-                      No explicit evidence references recorded.
-                    </p>
+                    <p className="text-muted-foreground mt-3">None recorded.</p>
                   ) : (
                     <ul className="mt-3 space-y-2 break-all">
                       {assessment.evidence_references.map((reference, index) => (
@@ -502,10 +378,7 @@ export default function OpeningShow({
                       ))}
                     </ul>
                   )}
-                  <JsonDetails
-                    label="Opening snapshot used for assessment"
-                    value={assessment.opening_snapshot}
-                  />
+                  <JsonDetails label="Opening snapshot used" value={assessment.opening_snapshot} />
                   <JsonDetails label="Score details" value={assessment.score_details} />
                 </div>
               </div>
@@ -518,17 +391,10 @@ export default function OpeningShow({
         </section>
 
         <section className="space-y-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <History className="size-4" />
-              <h2 className="font-semibold">Cross-source evidence</h2>
-            </div>
-            <p className="text-muted-foreground mt-1 text-sm">
-              Every source publication stays distinct while resolving to the same
-              canonical hiring need.
-            </p>
+          <div className="flex items-center gap-2">
+            <History className="size-4" />
+            <h2 className="font-semibold">Cross-source evidence</h2>
           </div>
-
           {postings.length === 0 ? (
             <div className="text-muted-foreground border border-dashed p-6 text-sm">
               This opening has no linked postings yet.
@@ -537,15 +403,12 @@ export default function OpeningShow({
             <div className="space-y-4">
               {postings.map((posting) => {
                 const sourceUrl = posting.canonical_url ?? posting.application_url
-
                 return (
                   <article key={posting.id} className="bg-card border">
-                    <div className="flex flex-col gap-4 border-b p-5 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="flex flex-col gap-4 border-b p-5 lg:flex-row lg:justify-between">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="outline">
-                            {sourceLabel(posting.source_key)}
-                          </Badge>
+                          <Badge variant="outline">{sourceLabel(posting.source_key)}</Badge>
                           <Badge variant={lifecycleVariant(posting.lifecycle_state)}>
                             {humanize(posting.lifecycle_state)}
                           </Badge>
@@ -557,7 +420,6 @@ export default function OpeningShow({
                           {posting.external_id && ` · ${posting.external_id}`}
                         </div>
                       </div>
-
                       {sourceUrl && (
                         <Button asChild variant="outline" size="sm">
                           <a href={sourceUrl} target="_blank" rel="noreferrer">
@@ -567,61 +429,45 @@ export default function OpeningShow({
                         </Button>
                       )}
                     </div>
-
                     <div className="grid gap-px bg-border sm:grid-cols-2 lg:grid-cols-4">
-                      <MetricCard
-                        label="First seen"
-                        value={relativeTime(posting.first_seen_at)}
-                      />
-                      <MetricCard
+                      <Metric label="First seen" value={relativeTime(posting.first_seen_at)} />
+                      <Metric
                         label="Last present"
                         value={relativeTime(posting.last_confirmed_present_at)}
                       />
-                      <MetricCard label="Snapshots" value={posting.history.length} />
-                      <MetricCard
+                      <Metric label="Snapshots" value={posting.history.length} />
+                      <Metric
                         label="Missing since"
                         value={posting.missing_since ? relativeTime(posting.missing_since) : "-"}
                       />
                     </div>
-
-                    <div className="p-5">
-                      {posting.history.length === 0 ? (
-                        <p className="text-muted-foreground text-sm">
-                          No normalized posting snapshots have been recorded yet.
-                        </p>
-                      ) : (
-                        <div className="space-y-3">
-                          {posting.history.map((snapshot) => (
-                            <div key={snapshot.id} className="border p-4">
-                              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                <div>
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <Badge variant="outline">
-                                      {humanize(snapshot.presence_state)}
-                                    </Badge>
-                                    <span className="text-sm font-medium">
-                                      {dateTime(snapshot.observed_at)}
-                                    </span>
-                                  </div>
-                                  <div className="text-muted-foreground mt-2 break-all text-xs">
-                                    Observation {snapshot.source_observation_id}
-                                  </div>
-                                </div>
-                                <div className="text-muted-foreground text-xs">
-                                  {snapshot.normalizer_key}@{snapshot.normalizer_version}
-                                </div>
-                              </div>
-
-                              <div className="text-muted-foreground mt-3 text-xs break-all">
-                                Digest {snapshot.content_digest}
-                              </div>
-                              <JsonDetails label="Normalized facts" value={snapshot.facts} />
-                              <JsonDetails label="Snapshot metadata" value={snapshot.metadata} />
+                    <div className="space-y-3 p-5">
+                      {posting.history.map((snapshot) => (
+                        <div key={snapshot.id} className="border p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant="outline">{humanize(snapshot.presence_state)}</Badge>
+                              <span className="text-sm font-medium">
+                                {dateTime(snapshot.observed_at)}
+                              </span>
                             </div>
-                          ))}
+                            <span className="text-muted-foreground text-xs">
+                              {snapshot.normalizer_key}@{snapshot.normalizer_version}
+                            </span>
+                          </div>
+                          <div className="text-muted-foreground mt-2 break-all text-xs">
+                            Observation {snapshot.source_observation_id}
+                          </div>
+                          <div className="text-muted-foreground mt-1 break-all text-xs">
+                            Digest {snapshot.content_digest}
+                          </div>
+                          <JsonDetails label="Normalized facts" value={snapshot.facts} />
+                          <JsonDetails label="Snapshot metadata" value={snapshot.metadata} />
                         </div>
+                      ))}
+                      {posting.history.length === 0 && (
+                        <p className="text-muted-foreground text-sm">No snapshots recorded yet.</p>
                       )}
-
                       <JsonDetails label="Posting metadata" value={posting.metadata} />
                     </div>
                   </article>
@@ -632,14 +478,7 @@ export default function OpeningShow({
         </section>
 
         <section className="space-y-4">
-          <div>
-            <h2 className="font-semibold">Opening parties</h2>
-            <p className="text-muted-foreground mt-1 text-sm">
-              Employer, vendor, agency, end-client, and other company roles stay
-              explicit instead of being collapsed into one publisher identity.
-            </p>
-          </div>
-
+          <h2 className="font-semibold">Opening parties</h2>
           {parties.length === 0 ? (
             <div className="text-muted-foreground border border-dashed p-6 text-sm">
               No opening parties have been resolved yet.
@@ -654,9 +493,9 @@ export default function OpeningShow({
                       {party.company?.name ?? party.label ?? "Unknown party"}
                     </span>
                   </div>
-                  <div className="text-muted-foreground mt-2 text-xs">
+                  <p className="text-muted-foreground mt-2 text-xs">
                     Confidence {Math.round(party.confidence * 100)}%
-                  </div>
+                  </p>
                   <div className="mt-4">
                     <JsonDetails label="Evidence" value={party.evidence} />
                     <JsonDetails label="Party metadata" value={party.metadata} />
