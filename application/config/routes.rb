@@ -21,6 +21,7 @@ Rails.application.routes.draw do
   resource :organization_selection, only: :create
   resources :client_companies, only: %i[index create]
   resources :projects, only: %i[index create]
+  resources :openings, only: :index
   resources :jobs, only: %i[index create show update] do
     resource :sourcing_brief, only: %i[create update]
   end

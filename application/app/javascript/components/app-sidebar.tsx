@@ -2,11 +2,12 @@ import { Link, usePage } from "@inertiajs/react"
 import {
   BriefcaseBusiness,
   Building2,
+  CalendarDays,
   ChevronsUpDown,
   FolderKanban,
+  Inbox,
   LayoutGrid,
   ListTodo,
-  CalendarDays,
   PanelsTopLeft,
   UserPlus,
   UsersRound,
@@ -32,6 +33,11 @@ const mainNavItems: NavItem[] = [
     title: "Home",
     href: "/home",
     icon: LayoutGrid,
+  },
+  {
+    title: "Openings",
+    href: "/openings",
+    icon: Inbox,
   },
   {
     title: "Tasks",
