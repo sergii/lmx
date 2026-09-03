@@ -1,0 +1,6 @@
+enforce_dependencies: strict
+dependencies:
+  - packs/platform
+  - packs/workspace
+metadata:
+  bounded_context: delivery

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Вакансії на DOU.ua</title>
+    <link>https://jobs.dou.ua/vacancies/</link>
+    <description>Нові вакансії</description>
+    <item>
+      <title>Senior Ruby Engineer в Acme Labs, Київ, віддалено</title>
+      <link>https://jobs.dou.ua/companies/acme/vacancies/379948/</link>
+      <guid>https://jobs.dou.ua/companies/acme/vacancies/379948/</guid>
+      <description><![CDATA[<p>Rails, PostgreSQL, AWS. Product team.</p>]]></description>
+      <pubDate>Wed, 02 Sep 2026 09:30:00 +0000</pubDate>
+    </item>
+    <item>
+      <title>Ruby Backend Engineer в Example, віддалено</title>
+      <link>https://jobs.dou.ua/companies/example/vacancies/380001/</link>
+      <guid>https://jobs.dou.ua/companies/example/vacancies/380001/</guid>
+      <description><![CDATA[<p>Ruby, distributed systems.</p>]]></description>
+      <pubDate>Tue, 01 Sep 2026 15:45:00 +0000</pubDate>
+    </item>
+  </channel>
+</rss>

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Djinni Jobs</title>
+    <link>https://djinni.co/jobs/</link>
+    <description>Jobs feed</description>
+    <item>
+      <title>Senior Ruby on Rails Engineer</title>
+      <link>https://djinni.co/jobs/742001-senior-ruby-on-rails-engineer/</link>
+      <description><![CDATA[<p>Rails, PostgreSQL, AWS. Product team.</p>]]></description>
+      <pubDate>Wed, 02 Sep 2026 09:30:00 +0000</pubDate>
+      <guid>https://djinni.co/jobs/742001-senior-ruby-on-rails-engineer/</guid>
+    </item>
+    <item>
+      <title>Ruby Backend Engineer</title>
+      <link>https://djinni.co/jobs/742002-ruby-backend-engineer/</link>
+      <description><![CDATA[<p>Ruby, Sidekiq, PostgreSQL.</p>]]></description>
+      <pubDate>Wed, 02 Sep 2026 10:45:00 +0000</pubDate>
+      <guid>https://djinni.co/jobs/742002-ruby-backend-engineer/</guid>
+    </item>
+  </channel>
+</rss>

@@ -1,0 +1,15 @@
+# Temporary review routing for the LMX adoption workbench.
+# Semantic ownership is documented in packs/OWNERSHIP.md and canonically in sergii/lmx/config/ownership.yml.
+
+* @sergii
+
+/packs/platform/ @sergii
+/packs/workspace/ @sergii
+/packs/acquisition/ @sergii
+/packs/market_catalog/ @sergii
+/packs/talent_profile/ @sergii
+/packs/intelligence/ @sergii
+/packs/personal_crm/ @sergii
+/packs/recruiting/ @sergii
+/packs/delivery/ @sergii
+/packs/integration/ @sergii

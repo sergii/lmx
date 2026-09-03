@@ -17,7 +17,7 @@ Intelligence should depend on stable Market Catalog and Talent Profile contracts
 
 ## Branch and worktree convention
 
-Each concurrent worker uses a separate branch and worktree.
+Each concurrent worker uses a separate branch and worktree in `sergii/lmx`.
 
 Examples:
 
@@ -51,18 +51,18 @@ Packwerk is a mechanical dependency guardrail. It does not replace DDD ownership
 
 The following files and areas are integration-owned and should not be edited concurrently unless the workers explicitly coordinate:
 
-- `Gemfile` and `Gemfile.lock`
-- `package.json` and lockfiles
+- `application/Gemfile` and `application/Gemfile.lock`
+- `application/package.json` and lockfiles
 - Rails application and environment configuration
 - global routes
 - shared RLS infrastructure
 - root-level shared concerns and technical primitives
-- CI workflows
-- `db/structure.sql`
+- root CI workflows
+- `application/db/structure.sql`
 - global schema or migration repair work
 - repository-wide UI theme/tokens
 
-A package may add its own migration, but changes to a shared migration, migration ordering repair, or generated `db/structure.sql` are serialized at integration time.
+A package may add its own migration, but changes to a shared migration, migration ordering repair, or generated `application/db/structure.sql` are serialized at integration time.
 
 ## Migration rule
 
@@ -85,15 +85,15 @@ Before changing code, a ChatGPT, Codex, or other coding-agent session should:
 1. Read `spec/README.md`.
 2. Read `spec/domain.md`, `spec/bounded-contexts.md`, and `spec/architecture.md` as needed for the task.
 3. Read this file and `spec/development/ownership.md`.
-4. Read the target package README and `package.yml`.
+4. Read the target package README and `application/packs/<package>/package.yml`.
 5. Identify the issue, branch, and package it owns.
 6. Avoid unrelated cleanup.
 7. Run package-boundary checks and relevant tests before handing work off.
 
 The repository should contain enough context that a new agent does not need the historical chat transcript to work safely.
 
-## Current donor-adoption exception
+## Canonical application state
 
-Until the Rails application is imported into `sergii/lmx/application/`, application implementation work happens in the donor repository `sergii/a322043jkf844f93mrfff` using `lmx/adoption` as the temporary integration branch. Donor `main` remains frozen.
+The donor-adoption exception is complete. The Rails application is now imported under `sergii/lmx/application/` and `sergii/lmx` is the only development source of truth.
 
-Concurrent implementation branches should branch from `lmx/adoption` and merge back into `lmx/adoption`, not into donor `main`. After the squashed subtree import, this exception disappears and `sergii/lmx` becomes the only development source of truth.
+The donor repository `sergii/a322043jkf844f93mrfff` and its `lmx/adoption` branch are archival provenance. Do not create new implementation branches there and do not merge LMX work into donor `main`.

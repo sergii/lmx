@@ -1,0 +1,7 @@
+#!/bin/bash -e
+
+# Database migrations run separately via bin/prepare-database with migrator
+# credentials. Long-running web and worker containers receive only the restricted
+# runtime database URLs, so they cannot bypass RLS by becoming schema owners.
+
+exec "${@}"

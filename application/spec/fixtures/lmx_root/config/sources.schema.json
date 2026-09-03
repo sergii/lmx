@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lmx.local/schema/sources.schema.json",
+  "title": "LMX source registry",
+  "type": "object",
+  "required": ["version", "sources"],
+  "properties": {
+    "version": { "type": "integer", "minimum": 1 },
+    "sources": { "type": "array", "items": { "$ref": "#/$defs/source" } },
+    "source_families": { "type": "array", "items": { "$ref": "#/$defs/sourceFamily" } },
+    "ingress_interfaces": {
+      "type": "array",
+      "items": { "enum": ["manual", "api", "webhook", "mcp", "import"] },
+      "uniqueItems": true
+    }
+  },
+  "$defs": {
+    "acquisition": {
+      "type": "object",
+      "required": ["type", "preference", "status"],
+      "properties": {
+        "type": { "enum": ["rss", "http_api", "http_html", "browser"] },
+        "preference": { "enum": ["primary", "fallback", "opportunistic"] },
+        "status": { "enum": ["evaluate", "planned", "active", "disabled"] }
+      },
+      "additionalProperties": true
+    },
+    "access": {
+      "type": "object",
+      "properties": {
+        "requires_auth": { "enum": [true, false, "unknown"] },
+        "robots_review": { "enum": ["pending", "approved", "restricted", "not_applicable"] },
+        "terms_review": { "enum": ["pending", "approved", "restricted", "not_applicable"] },
+        "rate_limit": { "type": ["string", "number", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "coverage": {
+      "type": "object",
+      "required": ["scope"],
+      "properties": {
+        "scope": { "enum": ["general", "focused"] },
+        "domains": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "technologies": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "roles": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "industries": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "work_modes": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      },
+      "additionalProperties": false
+    },
+    "lifecycle": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["discovered", "evaluating", "supported", "active", "degraded", "retired"] },
+        "reason": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "source": {
+      "type": "object",
+      "required": ["id", "name", "enabled", "kind", "coverage", "lifecycle", "acquisition"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+        "name": { "type": "string", "minLength": 1 },
+        "base_url": { "type": ["string", "null"], "format": "uri" },
+        "enabled": { "type": "boolean" },
+        "market": { "type": "string" },
+        "kind": { "enum": ["job_board", "aggregator", "recruiting_marketplace", "company_career", "community", "social"] },
+        "coverage": { "$ref": "#/$defs/coverage" },
+        "lifecycle": { "$ref": "#/$defs/lifecycle" },
+        "resolve_original_posting": { "type": "boolean" },
+        "acquisition": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/acquisition" } },
+        "access": { "$ref": "#/$defs/access" }
+      },
+      "additionalProperties": false
+    },
+    "sourceFamily": {
+      "type": "object",
+      "required": ["id", "name", "kind", "enabled", "coverage", "lifecycle", "acquisition"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+        "name": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["job_board", "aggregator", "recruiting_marketplace", "company_career", "community", "social"] },
+        "enabled": { "type": "boolean" },
+        "coverage": { "$ref": "#/$defs/coverage" },
+        "lifecycle": { "$ref": "#/$defs/lifecycle" },
+        "platforms": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "acquisition": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/acquisition" } }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

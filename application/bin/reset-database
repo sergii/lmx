@@ -1,0 +1,11 @@
+#!/bin/bash -euo pipefail
+
+# Reset only the local development database. Migrations run as the schema owner;
+# the web process continues to use the restricted runtime role afterwards.
+migration_user="${POSTGRES_MIGRATION_USER:-lmx}"
+runtime_password="${POSTGRES_RUNTIME_PASSWORD:-${POSTGRES_PASSWORD:-lmx_development}}"
+
+POSTGRES_USER="$migration_user" bin/rails db:drop db:create db:migrate db:seed
+POSTGRES_USER="$migration_user" \
+  POSTGRES_RUNTIME_PASSWORD="$runtime_password" \
+  bin/rails db:provision_runtime_role

@@ -1,6 +1,6 @@
 # LMX coding agent instructions
 
-This repository is the canonical specification and future application repository for LMX.
+This repository is the canonical specification and application repository for LMX.
 
 ## Before changing code
 
@@ -16,7 +16,7 @@ Start with:
 - `spec/development/ownership.md`
 - `config/ownership.yml`
 
-Then read the target package README and `package.yml`.
+Then read the target package README and `package.yml` under `application/`.
 
 ## Work boundary
 
@@ -35,7 +35,7 @@ Cross-package communication must use explicit public application services, comma
 
 Follow `spec/development/parallel-development.md`.
 
-Shared files such as dependency lockfiles, global Rails configuration, routes, CI, shared RLS infrastructure, and `db/structure.sql` are integration-owned and should be changed serially when multiple workers are active.
+Shared files such as dependency lockfiles, global Rails configuration, routes, CI, shared RLS infrastructure, and `application/db/structure.sql` are integration-owned and should be changed serially when multiple workers are active.
 
 ## Ownership
 
@@ -62,6 +62,10 @@ LMX
 
 Do not add product explanation to the root README.
 
-## Current donor adoption
+## Canonical application
 
-Until the Rails application is imported under `application/`, implementation work is temporarily performed in `sergii/a322043jkf844f93mrfff` on branches based on `lmx/adoption`. Do not merge adoption work into donor `main`.
+The Rails application lives under `application/`. All new LMX implementation work happens in this repository.
+
+The historical donor `sergii/a322043jkf844f93mrfff` is archival after the canonical snapshot import. Do not continue implementation on donor `lmx/adoption` and do not merge LMX work into donor `main`.
+
+Run Rails, Bundler, Packwerk, npm, and application tests from `application/` unless a root-level command explicitly wraps them.

@@ -1,0 +1,45 @@
+# Rails evaluates this file during the production image's asset precompile. That
+# build intentionally uses SECRET_KEY_BASE_DUMMY and has no database credentials.
+<% production_database_url = lambda do |name|
+     ENV.fetch(name).tap do |url|
+       raise "#{name} must not be blank in production" if url.empty?
+     end
+   end if ENV["RAILS_ENV"] == "production" && !ENV.key?("SECRET_KEY_BASE_DUMMY") %>
+
+default: &default
+  adapter: postgresql
+  encoding: unicode
+  host: <%= ENV.fetch("POSTGRES_HOST", "127.0.0.1") %>
+  port: <%= ENV.fetch("POSTGRES_PORT", 5433) %>
+  username: <%= ENV.fetch("POSTGRES_USER", "lmx_app") %>
+  password: <%= ENV.fetch("POSTGRES_PASSWORD", "lmx_development") %>
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
+
+development:
+  <<: *default
+  database: <%= ENV.fetch("POSTGRES_DATABASE", "lmx_development") %>
+
+# This database is recreated by the test suite. Keep it separate from development.
+test:
+  <<: *default
+  # Rails fixtures and schema loading require the database owner. Production and
+  # development requests use the restricted runtime role above.
+  username: <%= ENV.fetch("POSTGRES_TEST_USER", "lmx") %>
+  database: <%= ENV.fetch("POSTGRES_TEST_DATABASE", "lmx_test") %>
+
+production:
+  primary:
+    <<: *default
+    url: <%= production_database_url.call("DATABASE_URL") if production_database_url %>
+  cache:
+    <<: *default
+    url: <%= production_database_url.call("CACHE_DATABASE_URL") if production_database_url %>
+    migrations_paths: db/cache_migrate
+  queue:
+    <<: *default
+    url: <%= production_database_url.call("QUEUE_DATABASE_URL") if production_database_url %>
+    migrations_paths: db/queue_migrate
+  cable:
+    <<: *default
+    url: <%= production_database_url.call("CABLE_DATABASE_URL") if production_database_url %>
+    migrations_paths: db/cable_migrate

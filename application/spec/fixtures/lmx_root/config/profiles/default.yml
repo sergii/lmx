@@ -1,0 +1,37 @@
+version: 1
+
+targets:
+  domains: [technology]
+  technologies: [ruby, rails]
+  roles: [software_engineer, backend_engineer]
+
+source_priorities:
+  dou: { lane: local_fast, weight: 100 }
+  company_careers: { lane: remote_specialized, weight: 75 }
+
+acquisition:
+  source_queries:
+    work_ua:
+      - Ruby
+    robota_ua:
+      - Ruby
+
+ranking:
+  opportunity_score:
+    description: Overall attractiveness independent of immediate application urgency.
+  action_priority:
+    description: Practical value of acting now.
+    factors:
+      - freshness
+      - source_priority
+      - technical_fit
+
+policies:
+  compensation_hard_reject: false
+  geography_hard_reject: false
+  infer_job_coexistence: false
+  keep_relevant_low_score_observations: true
+  preserve_unknowns: true
+
+notification:
+  primary_surface: telegram

@@ -1,0 +1,3 @@
+enforce_dependencies: false
+metadata:
+  description: Legacy donor shell during LMX adoption. New domain code belongs in strict packs.

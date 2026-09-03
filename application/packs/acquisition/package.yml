@@ -1,0 +1,11 @@
+enforce_dependencies: strict
+enforce_privacy: true
+dependencies:
+  - packs/platform
+metadata:
+  bounded_context: acquisition
+  owns:
+    - SourceRun
+    - RawPayload
+    - IngestionRecord
+    - SourceObservation

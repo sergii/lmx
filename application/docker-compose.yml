@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:18.4
+    environment:
+      POSTGRES_DB: lmx_development
+      POSTGRES_USER: lmx
+      POSTGRES_PASSWORD: lmx_development
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./docker/postgres/init-app-role.sql:/docker-entrypoint-initdb.d/01-app-role.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lmx -d lmx_development"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

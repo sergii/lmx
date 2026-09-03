@@ -1,0 +1,46 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    branches: [main]
+    types:
+      - completed
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: false # deploy is disabled by default
+    # uncomment to enable:
+    # if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    timeout-minutes: 20
+    env:
+      DOCKER_BUILDKIT: 1
+      BUNDLE_ONLY: deploy
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.10.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Deploy
+        env:
+          VERSION: ${{ github.sha }}
+          KAMAL_REGISTRY_PASSWORD: ${{ secrets.KAMAL_REGISTRY_PASSWORD }}
+          RAILS_MASTER_KEY: ${{ secrets.RAILS_MASTER_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          CACHE_DATABASE_URL: ${{ secrets.CACHE_DATABASE_URL }}
+          QUEUE_DATABASE_URL: ${{ secrets.QUEUE_DATABASE_URL }}
+          CABLE_DATABASE_URL: ${{ secrets.CABLE_DATABASE_URL }}
+        run: bundle exec kamal deploy --version=$VERSION

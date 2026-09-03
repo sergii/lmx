@@ -1,0 +1,23 @@
+{
+  "total": 2,
+  "documents": [
+    {
+      "id": 742101,
+      "name": "Senior Ruby on Rails Engineer",
+      "companyName": "Example Product",
+      "cityName": "Remote",
+      "date": "2026-09-02T18:45:12.345",
+      "shortDescription": "<p>Build and operate <strong>Rails</strong> services.</p>",
+      "notebookId": 884201
+    },
+    {
+      "id": 742102,
+      "name": "Senior Backend Engineer (Ruby)",
+      "companyName": "Example Labs",
+      "cityName": "Kyiv",
+      "date": "2026-09-02T17:30:00.000",
+      "shortDescription": "Ruby, PostgreSQL, AWS",
+      "notebookId": 884202
+    }
+  ]
+}
