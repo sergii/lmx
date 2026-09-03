@@ -5,11 +5,11 @@ LMX reuses the existing Rails/PostgreSQL/Inertia donor application instead of bo
 ## Repositories
 
 - `sergii/lmx` is the canonical product repository and long-term system of record for specification, configuration, roadmap, and application code.
-- `sergii/a322043jkf844f93mrfff` is the donor repository.
+- `sergii/a322043jkf844f93mrfff` is the historical donor repository.
 - donor `main` is frozen as the original snapshot.
-- donor branch `lmx/adoption` is the temporary cleanup/adaptation branch.
+- donor branch `lmx/adoption` was the temporary cleanup/adaptation branch and is archival after import.
 
-The target layout is:
+The canonical layout is:
 
 ```text
 lmx/
@@ -26,15 +26,21 @@ lmx/
     ...
 ```
 
-No third repository is required now.
+No third repository is required.
 
-## Why cleanup happens on the donor branch first
+## Canonical import
 
-The GitHub application connector can safely modify the donor in place while preserving donor `main`. Cross-repository Git object copying is not a reliable application-migration mechanism, so cleanup/adaptation happens on `lmx/adoption` first.
+The donor adoption baseline was imported into `sergii/lmx/application/` as a squashed snapshot from:
 
-When the adoption branch reaches a coherent baseline, it is imported into `sergii/lmx/application/` as a squashed subtree snapshot. From that point forward, application development happens only in `sergii/lmx/application/`; the donor repository becomes archival.
+- repository: `sergii/a322043jkf844f93mrfff`
+- branch: `lmx/adoption`
+- donor commit: `0cb0ba29535b0f5d77f543f24d386feb948f8f02`
 
-A local import can use:
+The imported application retains explicit provenance in `application/.lmx-donor.yml`.
+
+From this point forward, application development happens only in `sergii/lmx/application/`; the donor repository is archival and is not a second source of truth.
+
+The equivalent local import shape is:
 
 ```bash
 git subtree add \
@@ -44,7 +50,7 @@ git subtree add \
   --squash
 ```
 
-After import, the donor branch is not a second source of truth.
+The actual canonicalization preserves the same semantic result: one reviewed canonical snapshot under `application/` with the exact donor SHA recorded as provenance.
 
 ## Adoption order
 
@@ -57,6 +63,8 @@ After import, the donor branch is not a second source of truth.
 7. Introduce LMX canonical concepts: Company, OpeningParty, JobOpening, JobPosting, SourceObservation, CandidateProfileVersion, MatchAssessment, Application, InterviewPrep, and RecruitingEngagement as an optional context.
 8. Import the coherent baseline under `lmx/application/`.
 9. Continue the Phase 0 roadmap only from `sergii/lmx`.
+
+Steps 1-8 are complete for the imported Phase 0 baseline. Step 9 is the active development mode.
 
 ## UI rule
 
