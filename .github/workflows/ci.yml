@@ -55,6 +55,45 @@ jobs:
       - name: Check package dependencies
         run: bin/packwerk check
 
+  deployment_config:
+    runs-on: ubuntu-latest
+    env:
+      BUNDLE_GEMFILE: ${{ github.workspace }}/application/Gemfile
+      LMX_STAGING_HOST: 127.0.0.1
+      LMX_STAGING_HOSTNAME: staging.lmx.invalid
+      KAMAL_REGISTRY_USERNAME: sergii
+      KAMAL_REGISTRY_PASSWORD: ci-registry-token
+      RAILS_MASTER_KEY: ci-master-key
+      DATABASE_URL: postgresql://lmx_app:runtime@db.invalid/lmx_primary
+      CACHE_DATABASE_URL: postgresql://lmx_app:runtime@db.invalid/lmx_cache
+      QUEUE_DATABASE_URL: postgresql://lmx_app:runtime@db.invalid/lmx_queue
+      CABLE_DATABASE_URL: postgresql://lmx_app:runtime@db.invalid/lmx_cable
+      DATABASE_MIGRATION_URL: postgresql://lmx_owner:owner@db.invalid/lmx_primary
+      CACHE_DATABASE_MIGRATION_URL: postgresql://lmx_owner:owner@db.invalid/lmx_cache
+      QUEUE_DATABASE_MIGRATION_URL: postgresql://lmx_owner:owner@db.invalid/lmx_queue
+      CABLE_DATABASE_MIGRATION_URL: postgresql://lmx_owner:owner@db.invalid/lmx_cable
+      POSTGRES_RUNTIME_PASSWORD: runtime
+      LMX_PHASE0_WORKSPACE_ID: 00000000-0000-0000-0000-000000000001
+      TELEGRAM_BOT_TOKEN: ci-telegram-token
+      TELEGRAM_CHAT_ID: "1"
+      OTEL_EXPORTER_OTLP_ENDPOINT: https://otel.invalid
+      OTEL_EXPORTER_OTLP_HEADERS: authorization=ci
+    defaults:
+      run:
+        working-directory: application
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 4.0.1
+          bundler-cache: true
+      - name: Validate deployment scripts
+        run: bash -n bin/prepare-database bin/provision-runtime-databases
+      - name: Validate staging Kamal configuration
+        run: bin/kamal config -d staging > /dev/null
+
   lint_js:
     runs-on: ubuntu-latest
     defaults:
