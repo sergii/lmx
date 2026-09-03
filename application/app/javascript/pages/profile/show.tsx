@@ -18,10 +18,7 @@ import { cn } from "@/lib/utils"
 
 type JsonScalar = string | number | boolean | null
 
-type JsonValue =
-  | JsonScalar
-  | JsonValue[]
-  | { [key: string]: JsonValue }
+type JsonValue = JsonScalar | JsonValue[] | { [key: string]: JsonValue }
 
 type ProfileData = Record<string, JsonValue>
 
@@ -146,7 +143,7 @@ function ProfileSnapshot({ version }: { version: ProfileVersion }) {
           {entries.map(([key, value]) => (
             <div
               key={key}
-              className="border-b p-5 last:border-b-0 md:border-r md:[&:nth-last-child(-n+2)]:border-b-0 md:[&:nth-child(2n)]:border-r-0"
+              className="border-b p-5 last:border-b-0 md:border-r md:[&:nth-child(2n)]:border-r-0 md:[&:nth-last-child(-n+2)]:border-b-0"
             >
               <p className="text-muted-foreground mb-2 text-xs font-medium tracking-wide uppercase">
                 {humanize(key)}
