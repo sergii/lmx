@@ -92,8 +92,8 @@ function lifecycleVariant(state: string) {
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-xl border bg-card px-4 py-3">
-      <div className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+    <div className="bg-card rounded-xl border px-4 py-3">
+      <div className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
         {label}
       </div>
       <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
@@ -127,15 +127,17 @@ export default function OpeningsIndex({
           <div className="text-muted-foreground max-w-md text-sm lg:text-right">
             {candidate ? (
               <span>
-                Matching against <strong className="text-foreground">{candidate.name}</strong>
+                Matching against{" "}
+                <strong className="text-foreground">{candidate.name}</strong>
                 {candidate.profile_version_number
                   ? ` · profile v${candidate.profile_version_number}`
                   : ""}
               </span>
             ) : (
               <span>
-                No canonical Candidate is linked to your user yet. Openings are still visible;
-                match scores will appear after a profile is linked.
+                No canonical Candidate is linked to your user yet. Openings are
+                still visible; match scores will appear after a profile is
+                linked.
               </span>
             )}
           </div>
@@ -151,10 +153,10 @@ export default function OpeningsIndex({
         <form
           action="/openings"
           method="get"
-          className="grid gap-3 rounded-xl border bg-card p-4 lg:grid-cols-[minmax(240px,1fr)_180px_180px_auto]"
+          className="bg-card grid gap-3 rounded-xl border p-4 lg:grid-cols-[minmax(240px,1fr)_180px_180px_auto]"
         >
           <div className="relative">
-            <Search className="text-muted-foreground pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" />
+            <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
             <Input
               name="q"
               defaultValue={filters.query ?? ""}
@@ -200,15 +202,16 @@ export default function OpeningsIndex({
             <Inbox className="text-muted-foreground mb-4 size-8" />
             <h2 className="text-lg font-semibold">No openings in this view</h2>
             <p className="text-muted-foreground mt-1 max-w-md text-sm">
-              The canonical catalog has no openings matching these filters yet. This view will fill
-              automatically as acquisition and reconciliation persist market evidence.
+              The canonical catalog has no openings matching these filters yet.
+              This view will fill automatically as acquisition and
+              reconciliation persist market evidence.
             </p>
           </div>
         ) : (
-          <div className="overflow-hidden rounded-xl border bg-card">
+          <div className="bg-card overflow-hidden rounded-xl border">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1080px] text-sm">
-                <thead className="bg-muted/40 text-muted-foreground border-b text-left text-xs font-medium uppercase tracking-wide">
+                <thead className="bg-muted/40 text-muted-foreground border-b text-left text-xs font-medium tracking-wide uppercase">
                   <tr>
                     <th className="px-4 py-3">Opening</th>
                     <th className="px-4 py-3">Evidence</th>
@@ -221,16 +224,23 @@ export default function OpeningsIndex({
                 </thead>
                 <tbody className="divide-y">
                   {openings.map((opening) => (
-                    <tr key={opening.id} className="align-top hover:bg-muted/20">
+                    <tr
+                      key={opening.id}
+                      className="hover:bg-muted/20 align-top"
+                    >
                       <td className="px-4 py-4">
                         <div className="flex max-w-md flex-wrap items-center gap-2">
                           <span className="font-semibold">{opening.title}</span>
-                          <Badge variant={lifecycleVariant(opening.lifecycle_state)}>
+                          <Badge
+                            variant={lifecycleVariant(opening.lifecycle_state)}
+                          >
                             {humanize(opening.lifecycle_state)}
                           </Badge>
                           {opening.signals.map((signal) => (
                             <Badge key={signal} variant="outline">
-                              {signal === "new" && <Sparkles className="size-3" />}
+                              {signal === "new" && (
+                                <Sparkles className="size-3" />
+                              )}
                               {signal}
                             </Badge>
                           ))}
@@ -248,12 +258,22 @@ export default function OpeningsIndex({
                       <td className="px-4 py-4">
                         <div className="flex max-w-56 flex-wrap gap-1.5">
                           {opening.sources.length === 0 ? (
-                            <span className="text-muted-foreground">No linked posting</span>
+                            <span className="text-muted-foreground">
+                              No linked posting
+                            </span>
                           ) : (
                             opening.sources.map((source) =>
                               source.url ? (
-                                <Badge key={source.key} variant="outline" asChild>
-                                  <a href={source.url} target="_blank" rel="noreferrer">
+                                <Badge
+                                  key={source.key}
+                                  variant="outline"
+                                  asChild
+                                >
+                                  <a
+                                    href={source.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
                                     {sourceLabel(source.key)}
                                     <ArrowUpRight className="size-3" />
                                   </a>
@@ -293,7 +313,9 @@ export default function OpeningsIndex({
 
                       <td className="text-muted-foreground px-4 py-4 text-xs whitespace-nowrap">
                         <div>First {relativeTime(opening.first_seen_at)}</div>
-                        <div className="mt-1">Last {relativeTime(opening.last_seen_at)}</div>
+                        <div className="mt-1">
+                          Last {relativeTime(opening.last_seen_at)}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -305,8 +327,9 @@ export default function OpeningsIndex({
 
         {summary.visible_count === 100 && (
           <p className="text-muted-foreground text-xs">
-            Showing the newest 100 matching canonical openings. Cursor pagination is the next UI
-            increment once the inbox needs more than the first working set.
+            Showing the newest 100 matching canonical openings. Cursor
+            pagination is the next UI increment once the inbox needs more than
+            the first working set.
           </p>
         )}
       </div>
