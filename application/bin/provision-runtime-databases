@@ -1,0 +1,32 @@
+#!/bin/bash -euo pipefail
+
+# Provision the restricted Rails runtime role in every production database.
+# Each invocation of the Rake task connects through the schema-owner URL while
+# granting the same restricted login access to that database.
+required_urls=(
+  DATABASE_MIGRATION_URL
+  CACHE_DATABASE_MIGRATION_URL
+  QUEUE_DATABASE_MIGRATION_URL
+  CABLE_DATABASE_MIGRATION_URL
+)
+
+: "${POSTGRES_RUNTIME_PASSWORD:?POSTGRES_RUNTIME_PASSWORD is required}"
+
+for name in "${required_urls[@]}"; do
+  if [ -z "${!name:-}" ]; then
+    echo "${name} is required to provision production runtime access" >&2
+    exit 1
+  fi
+done
+
+for name in "${required_urls[@]}"; do
+  target_url="${!name}"
+  echo "Provisioning restricted runtime access for ${name}"
+
+  DATABASE_URL="$target_url" \
+    CACHE_DATABASE_URL="$target_url" \
+    QUEUE_DATABASE_URL="$target_url" \
+    CABLE_DATABASE_URL="$target_url" \
+    RAILS_ENV=production \
+    ./bin/rails db:provision_runtime_role
+done

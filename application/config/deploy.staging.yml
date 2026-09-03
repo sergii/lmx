@@ -1,0 +1,10 @@
+servers:
+  web:
+    - <%= ENV.fetch("LMX_STAGING_HOST") %>
+
+proxy:
+  ssl: true
+  host: <%= ENV.fetch("LMX_STAGING_HOSTNAME") %>
+
+volumes:
+  - "lmx_staging_storage:/rails/storage"

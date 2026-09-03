@@ -1,14 +1,14 @@
-# LMX deployment baseline. Production hosts/registry are intentionally left as
-# placeholders until the canonical application is imported into sergii/lmx.
+# Canonical Kamal deployment configuration. Environment-specific hosts, proxy
+# names and persistent volumes live in config/deploy.<destination>.yml.
 service: lmx
-image: lmx
-
-servers:
-  web:
-    - 192.168.0.1
+image: sergii/lmx
+require_destination: true
 
 registry:
-  server: localhost:5555
+  server: ghcr.io
+  username: <%= ENV.fetch("KAMAL_REGISTRY_USERNAME", "sergii") %>
+  password:
+    - KAMAL_REGISTRY_PASSWORD
 
 env:
   secret:
@@ -20,17 +20,18 @@ env:
     - LMX_PHASE0_WORKSPACE_ID
     - TELEGRAM_BOT_TOKEN
     - TELEGRAM_CHAT_ID
+    - OTEL_EXPORTER_OTLP_ENDPOINT
+    - OTEL_EXPORTER_OTLP_HEADERS
   clear:
     SOLID_QUEUE_IN_PUMA: true
+    OTEL_SERVICE_NAME: lmx
 
 aliases:
   console: app exec --interactive --reuse "bin/rails console"
   shell: app exec --interactive --reuse "bash"
   logs: app logs -f
   dbc: app exec --interactive --reuse "bin/rails dbconsole --include-password"
-
-volumes:
-  - "lmx_storage:/rails/storage"
+  phase0: app exec --primary --reuse "bin/rails lmx:phase0:check"
 
 asset_path: /rails/public
 
@@ -38,5 +39,4 @@ builder:
   arch: amd64
   cache:
     type: registry
-    image: your-user/lmx-build-cache
     options: mode=max

@@ -47,6 +47,8 @@ bin/rails lmx:phase0:check
 
 That command is read-only and is intended to be run against a configured staging or production environment after deployment.
 
+Staging deployment and the production-mode database/RLS preparation sequence are documented in `../spec/development/staging-deployment.md`.
+
 ## Canonical provenance
 
 The initial canonical application snapshot was imported from:
