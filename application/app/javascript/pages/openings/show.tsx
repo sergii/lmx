@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 import type { ReactNode } from "react"
 
+import PersonalActions from "@/components/openings/personal-actions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import AppLayout from "@/layouts/app-layout"
@@ -103,6 +104,23 @@ interface Assessment {
   stale_reasons: string[]
 }
 
+interface PersonalState {
+  disposition: {
+    id: string
+    state: string
+    changed_at: string | null
+  } | null
+  application: {
+    id: string
+    attempt_number: number
+    applied_at: string | null
+    current_stage: string
+    channel: string | null
+    next_action: string | null
+    next_action_at: string | null
+  } | null
+}
+
 interface Props {
   opening: Opening
   company: Company | null
@@ -110,6 +128,7 @@ interface Props {
   postings: Posting[]
   candidate: Candidate | null
   assessment: Assessment | null
+  personal: PersonalState
 }
 
 const sourceLabels: Record<string, string> = {
@@ -235,6 +254,7 @@ export default function OpeningShow({
   postings,
   candidate,
   assessment,
+  personal,
 }: Props) {
   return (
     <AppLayout
@@ -277,6 +297,14 @@ export default function OpeningShow({
             </Button>
           )}
         </header>
+
+        <PersonalActions
+          openingId={opening.id}
+          candidatePresent={candidate !== null}
+          state={personal.disposition?.state ?? null}
+          changedAt={personal.disposition?.changed_at ?? null}
+          application={personal.application}
+        />
 
         <div className="bg-border grid gap-px overflow-hidden border sm:grid-cols-2 xl:grid-cols-4">
           <Metric
@@ -335,6 +363,9 @@ export default function OpeningShow({
                   {assessment
                     ? `v${assessment.version_number}`
                     : "Not assessed"}
+                </Row>
+                <Row label="Workflow">
+                  {personal.disposition?.state ?? "No personal state"}
                 </Row>
                 {assessment?.stale && (
                   <Row label="Needs refresh">
