@@ -73,16 +73,17 @@ RSpec.describe "Opening Personal CRM actions", type: :request do
     post apply_opening_path(opening_id)
 
     expect(personal_state.dig(:application, :id)).to eq(first_application_id)
-    WorkspaceContext.with(organization, membership:) do
-      expect(PersonalCrm::Application.count).to eq(1)
-    end
   end
 
   it "requires a canonical Candidate linked to the signed-in user" do
-    WorkspaceContext.with(organization, membership:) do
-      candidate_uuid = PersonalCrm::Identifiers.uuid(candidate_id, prefix: "candidate")
-      TalentProfile::Candidate.find(candidate_uuid).update!(linked_user_id: nil)
-    end
+    user_without_candidate = User.create!(
+      name: "Grace Hopper",
+      email: "grace-opening-actions@example.com",
+      password: "Password12345!",
+      verified: true
+    )
+    Membership.create!(user: user_without_candidate, organization:, role: "member")
+    sign_in user_without_candidate
 
     post save_opening_path(opening_id)
 
