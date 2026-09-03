@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "time"
+
 class OpeningDetailQuery
   FACT_KEYS = {
     compensation: %w[compensation_original_text compensation_text salary_text compensation salary],
@@ -321,6 +323,9 @@ class OpeningDetailQuery
   end
 
   def iso8601(value)
-    value&.iso8601
+    return if value.nil?
+    return value.iso8601 if value.respond_to?(:iso8601)
+
+    Time.iso8601(value.to_s).iso8601
   end
 end
