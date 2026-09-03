@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lmx.local/schema/profiles.schema.json",
+  "title": "LMX search/ranking profile",
+  "type": "object",
+  "required": ["version", "source_priorities", "ranking", "policies"],
+  "properties": {
+    "version": { "type": "integer", "minimum": 1 },
+    "targets": {
+      "type": "object",
+      "properties": {
+        "domains": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "technologies": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "roles": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "industries": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "work_modes": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      },
+      "additionalProperties": false
+    },
+    "source_priorities": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["lane", "weight"],
+        "properties": {
+          "lane": { "type": "string", "minLength": 1 },
+          "weight": { "type": "integer", "minimum": 0, "maximum": 100 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "acquisition": {
+      "type": "object",
+      "properties": {
+        "source_queries": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ranking": { "type": "object" },
+    "policies": {
+      "type": "object",
+      "properties": {
+        "compensation_hard_reject": { "type": "boolean" },
+        "geography_hard_reject": { "type": "boolean" },
+        "infer_job_coexistence": { "type": "boolean" },
+        "keep_relevant_low_score_observations": { "type": "boolean" },
+        "preserve_unknowns": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "notification": { "type": "object" }
+  },
+  "additionalProperties": false
+}

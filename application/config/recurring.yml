@@ -1,0 +1,50 @@
+# examples:
+#   periodic_cleanup:
+#     class: CleanSoftDeletedRecordsJob
+#     queue: background
+#     args: [ 1000, { batch_size: 500 } ]
+#     schedule: every hour
+#   periodic_cleanup_with_command:
+#     command: "SoftDeletedRecord.due.delete_all"
+#     priority: 2
+#     schedule: at 5am every day
+
+production:
+  clear_solid_queue_finished_jobs:
+    command: "SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)"
+    schedule: every hour at minute 12
+
+  acquisition_dou:
+    class: AcquisitionCollectionJob
+    queue: acquisition
+    args: [ "dou" ]
+    schedule: every 10 minutes
+
+  acquisition_djinni:
+    class: AcquisitionCollectionJob
+    queue: acquisition
+    args: [ "djinni" ]
+    schedule: every 10 minutes
+
+  acquisition_work_ua:
+    class: AcquisitionCollectionJob
+    queue: acquisition
+    args: [ "work_ua" ]
+    schedule: every 10 minutes
+
+  acquisition_robota_ua:
+    class: AcquisitionCollectionJob
+    queue: acquisition
+    args: [ "robota_ua" ]
+    schedule: every 10 minutes
+
+  acquisition_remoteok:
+    class: AcquisitionCollectionJob
+    queue: acquisition
+    args: [ "remoteok" ]
+    schedule: every 15 minutes
+
+  delivery_telegram:
+    class: DeliveryOutboxJob
+    queue: delivery
+    schedule: every minute

@@ -1,0 +1,13 @@
+enforce_dependencies: strict
+dependencies: []
+metadata:
+  bounded_context: platform
+  description: "Shared technical Rails primitives with no business ownership."
+  owns:
+    - ApplicationRecord
+    - TypedId
+    - Lmx::Configuration
+    - Platform::InboxMessage
+    - Platform::DomainEvent
+    - Platform::OutboxMessage
+    - Platform::Reliability::Api

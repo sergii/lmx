@@ -1,0 +1,11 @@
+enforce_dependencies: strict
+enforce_privacy: true
+dependencies:
+  - packs/platform
+  - packs/workspace
+metadata:
+  bounded_context: talent_profile
+  owns:
+    - Candidate
+    - CandidateProfileVersion
+    - CandidateEvidence

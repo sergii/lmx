@@ -1,0 +1,36 @@
+# frozen_string_literal: true
+
+class InterviewPolicy < ApplicationPolicy
+  if defined?(Enforceable)
+    include Enforceable
+    enforceable :show?, scope_name: :default
+  end
+
+  def index?
+    internal_membership?
+  end
+
+  def show?
+    internal_membership? && record.organization_id == membership.organization_id
+  end
+
+  def create?
+    internal_membership?
+  end
+
+  def update?
+    show?
+  end
+
+  relation_scope do |relation|
+    next relation.none unless internal_membership?
+
+    relation.where(organization_id: membership.organization_id)
+  end
+
+  private
+
+  def internal_membership?
+    user.present? && membership.present? && !membership.client_portal?
+  end
+end

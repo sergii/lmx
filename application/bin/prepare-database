@@ -1,0 +1,33 @@
+#!/bin/bash -euo pipefail
+
+# Local development and test databases use the connection configured in
+# config/database.yml. The production migrator is intentionally stricter: it
+# must receive explicit owner URLs and never reuse the restricted runtime role.
+if [ "${RAILS_ENV:-development}" != "production" ]; then
+  echo "Preparing ${RAILS_ENV:-development} database with local migration credentials"
+  POSTGRES_USER="${POSTGRES_MIGRATION_USER:-lmx}" ./bin/rails db:prepare
+  exit 0
+fi
+
+# Run this once per release in a short-lived migrator container. It deliberately
+# uses owner credentials only for db:prepare; web and worker containers keep their
+# restricted runtime database URLs.
+required_urls=(
+  DATABASE_MIGRATION_URL
+  CACHE_DATABASE_MIGRATION_URL
+  QUEUE_DATABASE_MIGRATION_URL
+  CABLE_DATABASE_MIGRATION_URL
+)
+
+for name in "${required_urls[@]}"; do
+  if [ -z "${!name:-}" ]; then
+    echo "${name} is required to prepare production databases" >&2
+    exit 1
+  fi
+done
+
+DATABASE_URL="$DATABASE_MIGRATION_URL" \
+  CACHE_DATABASE_URL="$CACHE_DATABASE_MIGRATION_URL" \
+  QUEUE_DATABASE_URL="$QUEUE_DATABASE_MIGRATION_URL" \
+  CABLE_DATABASE_URL="$CABLE_DATABASE_MIGRATION_URL" \
+  ./bin/rails db:prepare

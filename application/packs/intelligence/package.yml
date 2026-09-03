@@ -1,0 +1,8 @@
+enforce_dependencies: strict
+enforce_privacy: true
+dependencies:
+  - packs/platform
+  - packs/market_catalog
+  - packs/talent_profile
+metadata:
+  bounded_context: intelligence

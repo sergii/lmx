@@ -1,0 +1,13 @@
+enforce_dependencies: strict
+dependencies:
+  - "."
+  - packs/platform
+metadata:
+  bounded_context: workspace
+  migration_note: "Temporary dependency on the legacy donor shell remains for reverse associations from Organization, User, and Membership while those related donor models are extracted or decoupled."
+  owns:
+    - Organization
+    - User
+    - Membership
+    - Current
+    - WorkspaceContext
