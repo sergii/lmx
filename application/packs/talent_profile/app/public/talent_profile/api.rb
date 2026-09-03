@@ -35,6 +35,18 @@ module TalentProfile
       raise NotFound, "candidate not found"
     end
 
+    def fetch_candidate_for_user(user_id:)
+      workspace = WorkspaceGuard.current!
+      user_uuid = Identifiers.uuid(user_id, prefix: "user")
+      candidate = Candidate.for_organization(workspace).find_by!(linked_user_id: user_uuid)
+
+      candidate_snapshot(candidate).merge(
+        profile_version: candidate.latest_profile_version && profile_version_snapshot(candidate.latest_profile_version)
+      ).freeze
+    rescue ArgumentError, ActiveRecord::RecordNotFound
+      raise NotFound, "candidate not found"
+    end
+
     def fetch_latest_profile(candidate_id:)
       workspace = WorkspaceGuard.current!
       candidate_uuid = Identifiers.uuid(candidate_id, prefix: "candidate")

@@ -31,6 +31,26 @@ RSpec.describe TalentProfile::Api do
     expect(result.dig(:profile_version, :profile)).to eq("skills" => [ "Ruby", "Rails" ])
   end
 
+  it "fetches the canonical Candidate linked to the current workspace User" do
+    created = WorkspaceContext.with(workspace, membership:) do
+      described_class.create_candidate(
+        first_name: "Serhii",
+        last_name: "Candidate",
+        linked_user_id: user.typed_id,
+        profile: { skills: [ "Ruby" ] }
+      )
+    end
+
+    fetched = WorkspaceContext.with(workspace, membership:) do
+      described_class.fetch_candidate_for_user(user_id: user.typed_id)
+    end
+
+    expect(fetched.fetch(:id)).to eq(created.dig(:candidate, :id))
+    expect(fetched.fetch(:linked_user_id)).to eq(user.typed_id)
+    expect(fetched.dig(:profile_version, :id)).to eq(created.dig(:profile_version, :id))
+    expect(fetched).to be_frozen
+  end
+
   it "creates immutable, monotonically versioned profile snapshots backed by selected evidence" do
     candidate = WorkspaceContext.with(workspace) do
       described_class.create_candidate(first_name: "Ada", last_name: "Lovelace", profile: { skills: [ "Ruby" ] })

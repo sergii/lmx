@@ -33,6 +33,7 @@ Other packages should use only `TalentProfile::Api` for Phase 0 operations:
 - `record_evidence`
 - `create_profile_version`
 - `fetch_candidate`
+- `fetch_candidate_for_user` - canonical Candidate linked to one authenticated workspace User
 - `fetch_latest_profile` - latest canonical `CandidateProfileVersion` for a Candidate
 - `fetch_profile_version` - one exact historical profile version
 
