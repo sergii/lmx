@@ -7,8 +7,11 @@ require "tmpdir"
 RSpec.describe Lmx::Configuration, type: :model do
   let(:fixture_root) { Rails.root.join("spec/fixtures/lmx_root").expand_path }
 
-  after do
-    described_class.load!(root: fixture_root)
+  around do |example|
+    original_root = described_class.root
+    example.run
+  ensure
+    described_class.load!(root: original_root)
   end
 
   it "loads and freezes source and profile configuration from a validated root" do
