@@ -12,4 +12,14 @@ class OpeningsController < InertiaController
       source_key: params[:source]
     )
   end
+
+  def show
+    render inertia: "openings/show", props: OpeningDetailQuery.call(
+      workspace_id: Current.organization.typed_id,
+      user_id: Current.user.typed_id,
+      opening_id: params[:id]
+    )
+  rescue MarketCatalog::Api::NotFound
+    head :not_found
+  end
 end
