@@ -374,9 +374,10 @@ module PersonalCrm
         payload:
       )
 
-      command_executor.call(command_id: provenance.fetch(:command_id)) do
+      result = command_executor.call(command_id: provenance.fetch(:command_id)) do
         yield provenance
       end.fetch(:result)
+      deep_freeze(result.deep_symbolize_keys)
     rescue KeyError => error
       raise InvalidInput, "missing command provenance field: #{error.key}"
     end
