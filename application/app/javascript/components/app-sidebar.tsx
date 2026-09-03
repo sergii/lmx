@@ -40,6 +40,11 @@ const mainNavItems: NavItem[] = [
     icon: Inbox,
   },
   {
+    title: "Applications",
+    href: "/applications",
+    icon: PanelsTopLeft,
+  },
+  {
     title: "Tasks",
     href: "/tasks",
     icon: ListTodo,
@@ -63,11 +68,6 @@ const mainNavItems: NavItem[] = [
     title: "Jobs",
     href: "/jobs",
     icon: BriefcaseBusiness,
-  },
-  {
-    title: "Pipeline",
-    href: "/pipeline",
-    icon: PanelsTopLeft,
   },
   {
     title: "Candidates",
