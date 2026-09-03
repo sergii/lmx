@@ -98,14 +98,17 @@ Owns candidate opportunity workflow.
 
 Responsibilities:
 
-- Application
-- application attempts and stages
+- OpeningDisposition
+- Application and independent repeat application attempts
+- application stage and next-action history
 - Contact
 - Interaction
 - Interview
 - InterviewPrep
 - notes, reminders and next actions
-- personal Kanban state
+- personal Kanban/list/table read models
+
+Personal CRM workflow history is event-authoritative. It owns the interpretation/reduction of its immutable workflow events and any rebuildable read projections needed for daily queries. Projection tables are private implementation details and are not the system of record.
 
 Personal state is never used as the source of market state.
 
@@ -163,6 +166,7 @@ Integration adapters call application services. They never bypass bounded-contex
 - Talent Profile owns candidate knowledge. Intelligence consumes candidate-profile versions but does not rewrite them.
 - Intelligence consumes canonical facts and observations but does not rewrite source evidence.
 - Personal CRM references Candidate and JobOpening identities without owning candidate-profile history or market lifecycle.
+- Personal CRM projections may cache cross-opportunity workflow state, but consumers access them only through Personal CRM public APIs.
 - Recruiting composes shared domain identities rather than introducing alternate meanings for them.
 - Delivery reacts to application/integration events and does not own business state.
 - Integration exposes controlled boundaries to agents and external systems.
