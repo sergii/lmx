@@ -39,9 +39,23 @@ RSpec.describe PersonalCrm::Api, type: :model do
           job_opening_id: opening.fetch(:id),
           command: command("save-1")
         )
-      end.to change(PersonalCrm::OpeningDisposition, :count).by(1)
-        .and change(Platform::DomainEvent.where(event_type: described_class::OPENING_SAVED), :count).by(1)
-        .and change(Platform::OutboxMessage.where(message_type: described_class::OPENING_SAVED), :count).by(1)
+      end.to change(
+        Platform::InboxMessage.where(command_name: "personal_crm.save_opening"), :count
+      ).by(1).and change(
+        Platform::DomainEvent.where(event_type: described_class::OPENING_SAVED), :count
+      ).by(1).and change(
+        Platform::OutboxMessage.where(message_type: described_class::OPENING_SAVED), :count
+      ).by(1)
+
+      event = Platform::DomainEvent.find_by!(event_type: described_class::OPENING_SAVED)
+      expect(event.aggregate_type).to eq(described_class::AGGREGATE_TYPE)
+      expect(event.data).to include(
+        "workspace_id" => organization.typed_id,
+        "candidate_id" => candidate.fetch(:id),
+        "job_opening_id" => opening.fetch(:id),
+        "state" => "saved",
+        "previous_state" => nil
+      )
 
       expect do
         described_class.save_opening(
@@ -50,9 +64,13 @@ RSpec.describe PersonalCrm::Api, type: :model do
           job_opening_id: opening.fetch(:id),
           command: command("save-1")
         )
-      end.to change(PersonalCrm::OpeningDisposition, :count).by(0)
-        .and change(Platform::DomainEvent.where(event_type: described_class::OPENING_SAVED), :count).by(0)
-        .and change(Platform::OutboxMessage.where(message_type: described_class::OPENING_SAVED), :count).by(0)
+      end.to change(
+        Platform::InboxMessage.where(command_name: "personal_crm.save_opening"), :count
+      ).by(0).and change(
+        Platform::DomainEvent.where(event_type: described_class::OPENING_SAVED), :count
+      ).by(0).and change(
+        Platform::OutboxMessage.where(message_type: described_class::OPENING_SAVED), :count
+      ).by(0)
 
       context = described_class.fetch_opening_context(
         workspace_id: organization.typed_id,
@@ -60,6 +78,7 @@ RSpec.describe PersonalCrm::Api, type: :model do
         job_opening_id: opening.fetch(:id)
       )
       expect(context.dig(:disposition, :state)).to eq("saved")
+      expect(context.fetch(:applications)).to be_empty
     end
   end
 
