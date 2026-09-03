@@ -12,6 +12,14 @@ class ApplicationsController < InertiaController
   end
 
   def update
+    return update_legacy_application unless personal_application_id?
+
+    update_personal_application
+  end
+
+  private
+
+  def update_personal_application
     candidate = TalentProfile::Api.fetch_candidate_for_user(user_id: Current.user.typed_id)
     application = PersonalCrm::Api.fetch_application(
       workspace_id: Current.organization.typed_id,
@@ -45,7 +53,19 @@ class ApplicationsController < InertiaController
     head :unprocessable_entity
   end
 
-  private
+  def update_legacy_application
+    application = Application.find_by_typed_id!(params[:id])
+    application.move_to!(stage: params.require(:stage), moved_by: Current.user)
+    redirect_to legacy_destination_for(application)
+  rescue ArgumentError, ActiveRecord::RecordInvalid => error
+    redirect_to legacy_destination_for(application), inertia: { errors: { stage: error.message } }
+  end
+
+  def personal_application_id?
+    TypeID.from_string(params[:id].to_s).prefix == "application_attempt"
+  rescue TypeID::Error
+    false
+  end
 
   def command_provenance
     {
@@ -63,5 +83,9 @@ class ApplicationsController < InertiaController
   def return_view
     value = params[:return_view].to_s
     %w[kanban list table].include?(value) ? value : "kanban"
+  end
+
+  def legacy_destination_for(application)
+    params[:return_to] == "pipeline" ? pipeline_path : job_path(application.job_id)
   end
 end
