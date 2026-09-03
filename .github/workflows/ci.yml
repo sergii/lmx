@@ -1,7 +1,8 @@
 name: CI
 
 on:
-  pull_request:
+  push:
+    branches: [ feat/applications-workflow ]
 
 permissions:
   contents: write
@@ -13,7 +14,7 @@ jobs:
       - name: Checkout feature branch
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: feat/applications-workflow
       - name: Restore Rails migration metadata table
         run: |
           python3 - <<'PY'
@@ -47,6 +48,4 @@ ALTER TABLE ONLY public.schema_migrations
             exit 0
           fi
           git commit -m "Restore Rails migration metadata table"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
-
-# Temporary repair workflow. Restore canonical CI after the structure commit.
+          git push origin HEAD:feat/applications-workflow
