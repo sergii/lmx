@@ -62,9 +62,18 @@ The actual canonicalization preserves the same semantic result: one reviewed can
 6. Remove staffing-specific coupling from the semantic core (`ClientCompany -> Project -> Job`).
 7. Introduce LMX canonical concepts: Company, OpeningParty, JobOpening, JobPosting, SourceObservation, CandidateProfileVersion, MatchAssessment, Application, InterviewPrep, and RecruitingEngagement as an optional context.
 8. Import the coherent baseline under `lmx/application/`.
-9. Continue the Phase 0 roadmap only from `sergii/lmx`.
+9. Continue roadmap implementation only from `sergii/lmx`.
 
-Steps 1-8 are complete for the imported Phase 0 baseline. Step 9 is the active development mode.
+The adoption sequence is complete. Phase 0 implementation established the canonical ingestion, market, talent, intelligence, reliability, RLS, and operational-readiness foundations. Live environment verification remains a deployment concern and does not make the donor repository active again. Product feature development now proceeds from the canonical roadmap in `sergii/lmx`.
+
+## Canonical follow-through
+
+Donor concepts are reusable only as interaction/design inputs, not as domain authority. In particular:
+
+- the donor pipeline's Kanban/list/table interaction pattern is useful and can be adapted;
+- donor `Application` persistence and `ClientCompany -> Project -> Job` coupling are legacy semantics and must not be reused across package boundaries;
+- canonical Personal CRM owns repeatable Candidate -> JobOpening application attempts, immutable workflow history, and rebuildable read projections;
+- old root-shell controllers or pages may be replaced as canonical bounded-context APIs become available.
 
 ## UI rule
 
