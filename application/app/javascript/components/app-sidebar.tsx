@@ -10,6 +10,7 @@ import {
   ListTodo,
   PanelsTopLeft,
   UserPlus,
+  UserRound,
   UsersRound,
 } from "lucide-react"
 
@@ -43,6 +44,11 @@ const mainNavItems: NavItem[] = [
     title: "Applications",
     href: "/applications",
     icon: PanelsTopLeft,
+  },
+  {
+    title: "Profile",
+    href: "/profile",
+    icon: UserRound,
   },
   {
     title: "Tasks",
