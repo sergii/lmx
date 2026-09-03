@@ -44,7 +44,7 @@ interface Party {
   label: string | null
   confidence: number
   company: Company | null
-  evidence: JsonValue
+  evidence: unknown
   metadata: Record<string, JsonValue>
 }
 
@@ -196,7 +196,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-function JsonDetails({ label, value }: { label: string; value: JsonValue }) {
+function JsonDetails({ label, value }: { label: string; value: unknown }) {
   return (
     <details className="border-t pt-3">
       <summary className="text-muted-foreground cursor-pointer text-xs font-medium tracking-wide uppercase">
