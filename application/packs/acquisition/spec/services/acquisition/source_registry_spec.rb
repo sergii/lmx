@@ -5,7 +5,21 @@ require "rails_helper"
 RSpec.describe Acquisition::SourceRegistry, type: :model do
   it "exposes configured source identifiers and acquisition strategies" do
     expect(described_class.source_ids).to eq(
-      [ "dou", "djinni", "work_ua", "robota_ua", "remoteok", "remote_rails", "ruby_on_rails_jobs" ]
+      [
+        "dou",
+        "djinni",
+        "work_ua",
+        "robota_ua",
+        "jooble",
+        "remoteok",
+        "remote_rails",
+        "ruby_on_rails_jobs",
+        "x",
+        "hacker_news",
+        "linkedin",
+        "indeed",
+        "wellfound"
+      ]
     )
     expect(described_class.enabled?("dou")).to be(true)
     expect(described_class.enabled?("remoteok")).to be(true)
