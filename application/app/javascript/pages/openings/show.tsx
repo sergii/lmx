@@ -1,6 +1,12 @@
 import { Head, Link } from "@inertiajs/react"
 import { format, formatDistanceToNowStrict } from "date-fns"
-import { ArrowLeft, ArrowUpRight, Database, History, Sparkles } from "lucide-react"
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  Database,
+  History,
+  Sparkles,
+} from "lucide-react"
 import type { ReactNode } from "react"
 
 import { Badge } from "@/components/ui/badge"
@@ -8,12 +14,7 @@ import { Button } from "@/components/ui/button"
 import AppLayout from "@/layouts/app-layout"
 
 type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | JsonValue[]
-  | Record<string, JsonValue>
+  string | number | boolean | null | JsonValue[] | Record<string, JsonValue>
 
 interface Company {
   id: string
@@ -154,14 +155,16 @@ function relativeTime(value: string | null) {
 
 function lifecycleVariant(state: string) {
   if (state === "closed") return "secondary" as const
-  if (state === "missing" || state === "probably_closed") return "outline" as const
+  if (state === "missing" || state === "probably_closed")
+    return "outline" as const
   return "default" as const
 }
 
 function displayValue(value: JsonValue) {
   if (value === null) return "Unknown"
   if (typeof value === "string") return value
-  if (typeof value === "number" || typeof value === "boolean") return String(value)
+  if (typeof value === "number" || typeof value === "boolean")
+    return String(value)
   return JSON.stringify(value)
 }
 
@@ -212,7 +215,9 @@ function JsonDetails({ label, value }: { label: string; value: unknown }) {
 function Insight({ title, items }: { title: string; items: JsonValue[] }) {
   return (
     <div className="border p-4">
-      <div className="text-xs font-semibold tracking-wide uppercase">{title}</div>
+      <div className="text-xs font-semibold tracking-wide uppercase">
+        {title}
+      </div>
       {items.length === 0 ? (
         <p className="text-muted-foreground mt-3 text-sm">None recorded.</p>
       ) : (
@@ -246,14 +251,16 @@ export default function OpeningShow({
       <div className="space-y-6 p-6">
         <header className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <Button asChild variant="ghost" size="sm" className="-ml-3 mb-3">
+            <Button asChild variant="ghost" size="sm" className="mb-3 -ml-3">
               <Link href="/openings">
                 <ArrowLeft className="size-4" />
                 Back to openings
               </Link>
             </Button>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-semibold tracking-tight">{opening.title}</h1>
+              <h1 className="text-2xl font-semibold tracking-tight">
+                {opening.title}
+              </h1>
               <Badge variant={lifecycleVariant(opening.lifecycle_state)}>
                 {humanize(opening.lifecycle_state)}
               </Badge>
@@ -274,11 +281,15 @@ export default function OpeningShow({
           )}
         </header>
 
-        <div className="grid gap-px overflow-hidden border bg-border sm:grid-cols-2 xl:grid-cols-4">
+        <div className="bg-border grid gap-px overflow-hidden border sm:grid-cols-2 xl:grid-cols-4">
           <Metric
             label="Opportunity score"
             value={score(assessment?.opportunity_score ?? null)}
-            note={assessment ? `Assessment v${assessment.version_number}` : "Not assessed"}
+            note={
+              assessment
+                ? `Assessment v${assessment.version_number}`
+                : "Not assessed"
+            }
           />
           <Metric
             label="Action priority"
@@ -297,12 +308,18 @@ export default function OpeningShow({
             </div>
             <div className="mt-4">
               <Row label="Company">{company?.name ?? "Unknown company"}</Row>
-              <Row label="Compensation">{opening.compensation ?? "Unknown"}</Row>
+              <Row label="Compensation">
+                {opening.compensation ?? "Unknown"}
+              </Row>
               <Row label="Location">{opening.location ?? "Unknown"}</Row>
-              <Row label="Remote policy">{opening.remote_policy ?? "Unknown"}</Row>
+              <Row label="Remote policy">
+                {opening.remote_policy ?? "Unknown"}
+              </Row>
               <Row label="First seen">{dateTime(opening.first_seen_at)}</Row>
               <Row label="Last seen">{dateTime(opening.last_seen_at)}</Row>
-              {opening.closed_at && <Row label="Closed">{dateTime(opening.closed_at)}</Row>}
+              {opening.closed_at && (
+                <Row label="Closed">{dateTime(opening.closed_at)}</Row>
+              )}
             </div>
             <JsonDetails label="Canonical metadata" value={opening.metadata} />
           </section>
@@ -318,10 +335,14 @@ export default function OpeningShow({
                     : "No profile version"}
                 </Row>
                 <Row label="Assessment">
-                  {assessment ? `v${assessment.version_number}` : "Not assessed"}
+                  {assessment
+                    ? `v${assessment.version_number}`
+                    : "Not assessed"}
                 </Row>
                 {assessment?.stale && (
-                  <Row label="Needs refresh">{assessment.stale_reasons.join(", ")}</Row>
+                  <Row label="Needs refresh">
+                    {assessment.stale_reasons.join(", ")}
+                  </Row>
                 )}
               </div>
             ) : (
@@ -348,7 +369,9 @@ export default function OpeningShow({
           {assessment ? (
             <div className="bg-card border p-5">
               {assessment.recommendation && (
-                <p className="max-w-4xl text-sm leading-relaxed">{assessment.recommendation}</p>
+                <p className="max-w-4xl text-sm leading-relaxed">
+                  {assessment.recommendation}
+                </p>
               )}
               <div className="mt-5 grid gap-3 lg:grid-cols-3">
                 <Insight title="Strengths" items={assessment.strengths} />
@@ -356,13 +379,22 @@ export default function OpeningShow({
                 <Insight title="Risks" items={assessment.risks} />
               </div>
               <div className="mt-3">
-                <Insight title="Interview angles" items={assessment.interview_angles} />
+                <Insight
+                  title="Interview angles"
+                  items={assessment.interview_angles}
+                />
               </div>
               <div className="mt-5 grid gap-3 lg:grid-cols-2">
                 <div className="border p-4 text-sm">
-                  <Row label="Profile version">{assessment.candidate_profile_version_id}</Row>
-                  <Row label="Evidence cutoff">{dateTime(assessment.opening_evidence_cutoff)}</Row>
-                  <Row label="Scoring policy">{assessment.scoring_policy_version}</Row>
+                  <Row label="Profile version">
+                    {assessment.candidate_profile_version_id}
+                  </Row>
+                  <Row label="Evidence cutoff">
+                    {dateTime(assessment.opening_evidence_cutoff)}
+                  </Row>
+                  <Row label="Scoring policy">
+                    {assessment.scoring_policy_version}
+                  </Row>
                   <JsonDetails label="Processor" value={assessment.processor} />
                 </div>
                 <div className="border p-4 text-sm">
@@ -373,13 +405,23 @@ export default function OpeningShow({
                     <p className="text-muted-foreground mt-3">None recorded.</p>
                   ) : (
                     <ul className="mt-3 space-y-2 break-all">
-                      {assessment.evidence_references.map((reference, index) => (
-                        <li key={`evidence-${index}`}>{displayValue(reference)}</li>
-                      ))}
+                      {assessment.evidence_references.map(
+                        (reference, index) => (
+                          <li key={`evidence-${index}`}>
+                            {displayValue(reference)}
+                          </li>
+                        ),
+                      )}
                     </ul>
                   )}
-                  <JsonDetails label="Opening snapshot used" value={assessment.opening_snapshot} />
-                  <JsonDetails label="Score details" value={assessment.score_details} />
+                  <JsonDetails
+                    label="Opening snapshot used"
+                    value={assessment.opening_snapshot}
+                  />
+                  <JsonDetails
+                    label="Score details"
+                    value={assessment.score_details}
+                  />
                 </div>
               </div>
             </div>
@@ -402,17 +444,24 @@ export default function OpeningShow({
           ) : (
             <div className="space-y-4">
               {postings.map((posting) => {
-                const sourceUrl = posting.canonical_url ?? posting.application_url
+                const sourceUrl =
+                  posting.canonical_url ?? posting.application_url
                 return (
                   <article key={posting.id} className="bg-card border">
                     <div className="flex flex-col gap-4 border-b p-5 lg:flex-row lg:justify-between">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="outline">{sourceLabel(posting.source_key)}</Badge>
-                          <Badge variant={lifecycleVariant(posting.lifecycle_state)}>
+                          <Badge variant="outline">
+                            {sourceLabel(posting.source_key)}
+                          </Badge>
+                          <Badge
+                            variant={lifecycleVariant(posting.lifecycle_state)}
+                          >
                             {humanize(posting.lifecycle_state)}
                           </Badge>
-                          {posting.changed && <Badge variant="outline">changed</Badge>}
+                          {posting.changed && (
+                            <Badge variant="outline">changed</Badge>
+                          )}
                         </div>
                         <h3 className="mt-3 font-semibold">{posting.title}</h3>
                         <div className="text-muted-foreground mt-1 text-sm">
@@ -429,16 +478,26 @@ export default function OpeningShow({
                         </Button>
                       )}
                     </div>
-                    <div className="grid gap-px bg-border sm:grid-cols-2 lg:grid-cols-4">
-                      <Metric label="First seen" value={relativeTime(posting.first_seen_at)} />
+                    <div className="bg-border grid gap-px sm:grid-cols-2 lg:grid-cols-4">
+                      <Metric
+                        label="First seen"
+                        value={relativeTime(posting.first_seen_at)}
+                      />
                       <Metric
                         label="Last present"
                         value={relativeTime(posting.last_confirmed_present_at)}
                       />
-                      <Metric label="Snapshots" value={posting.history.length} />
+                      <Metric
+                        label="Snapshots"
+                        value={posting.history.length}
+                      />
                       <Metric
                         label="Missing since"
-                        value={posting.missing_since ? relativeTime(posting.missing_since) : "-"}
+                        value={
+                          posting.missing_since
+                            ? relativeTime(posting.missing_since)
+                            : "-"
+                        }
                       />
                     </div>
                     <div className="space-y-3 p-5">
@@ -446,29 +505,43 @@ export default function OpeningShow({
                         <div key={snapshot.id} className="border p-4">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="flex flex-wrap items-center gap-2">
-                              <Badge variant="outline">{humanize(snapshot.presence_state)}</Badge>
+                              <Badge variant="outline">
+                                {humanize(snapshot.presence_state)}
+                              </Badge>
                               <span className="text-sm font-medium">
                                 {dateTime(snapshot.observed_at)}
                               </span>
                             </div>
                             <span className="text-muted-foreground text-xs">
-                              {snapshot.normalizer_key}@{snapshot.normalizer_version}
+                              {snapshot.normalizer_key}@
+                              {snapshot.normalizer_version}
                             </span>
                           </div>
-                          <div className="text-muted-foreground mt-2 break-all text-xs">
+                          <div className="text-muted-foreground mt-2 text-xs break-all">
                             Observation {snapshot.source_observation_id}
                           </div>
-                          <div className="text-muted-foreground mt-1 break-all text-xs">
+                          <div className="text-muted-foreground mt-1 text-xs break-all">
                             Digest {snapshot.content_digest}
                           </div>
-                          <JsonDetails label="Normalized facts" value={snapshot.facts} />
-                          <JsonDetails label="Snapshot metadata" value={snapshot.metadata} />
+                          <JsonDetails
+                            label="Normalized facts"
+                            value={snapshot.facts}
+                          />
+                          <JsonDetails
+                            label="Snapshot metadata"
+                            value={snapshot.metadata}
+                          />
                         </div>
                       ))}
                       {posting.history.length === 0 && (
-                        <p className="text-muted-foreground text-sm">No snapshots recorded yet.</p>
+                        <p className="text-muted-foreground text-sm">
+                          No snapshots recorded yet.
+                        </p>
                       )}
-                      <JsonDetails label="Posting metadata" value={posting.metadata} />
+                      <JsonDetails
+                        label="Posting metadata"
+                        value={posting.metadata}
+                      />
                     </div>
                   </article>
                 )
@@ -498,7 +571,10 @@ export default function OpeningShow({
                   </p>
                   <div className="mt-4">
                     <JsonDetails label="Evidence" value={party.evidence} />
-                    <JsonDetails label="Party metadata" value={party.metadata} />
+                    <JsonDetails
+                      label="Party metadata"
+                      value={party.metadata}
+                    />
                   </div>
                 </div>
               ))}
