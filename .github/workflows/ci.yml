@@ -29,6 +29,7 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           path = Path("app/javascript/pages/applications/index.tsx")
           text = path.read_text()
@@ -36,16 +37,18 @@ jobs:
               '  Columns3,\n  List,\n',
               '  Columns3,\n  GripVertical,\n  List,\n',
           )
-          old = '''      <button
-                type="button"
-                {...attributes}
-                {...listeners}
-                aria-label={`Drag ${application.opening?.title ?? "application"}`}
-                className="mb-2 w-full cursor-grab text-left active:cursor-grabbing"
-              >
-                <ApplicationTitle application={application} />
-              </button>'''
-          new = '''      <div className="mb-2 flex items-start gap-2">
+          pattern = re.compile(
+              r'''      <button\n'''
+              r'''        type="button"\n'''
+              r'''        \{\.\.\.attributes\}\n'''
+              r'''        \{\.\.\.listeners\}\n'''
+              r'''        aria-label=\{`Drag \$\{application\.opening\?\.title \?\? "application"\}`\}\n'''
+              r'''        className="mb-2 w-full cursor-grab text-left active:cursor-grabbing"\n'''
+              r'''      >\n'''
+              r'''        <ApplicationTitle application=\{application\} />\n'''
+              r'''      </button>'''
+          )
+          replacement = '''      <div className="mb-2 flex items-start gap-2">
                 <button
                   type="button"
                   {...attributes}
@@ -57,9 +60,10 @@ jobs:
                 </button>
                 <ApplicationTitle application={application} />
               </div>'''
-          if old not in text:
-              raise SystemExit("Expected drag-card markup was not found")
-          path.write_text(text.replace(old, new))
+          text, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f"Expected one drag-card markup match, got {count}")
+          path.write_text(text)
           PY
           npx prettier --write app/javascript/pages/applications/index.tsx
       - name: Commit formatted Applications UI
