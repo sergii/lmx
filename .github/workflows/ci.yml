@@ -26,15 +26,7 @@ jobs:
           if marker not in text:
               raise SystemExit("schema_migrations data marker was not found")
           if "CREATE TABLE public.schema_migrations" not in text:
-              ddl = '''
-
-CREATE TABLE public.schema_migrations (
-    version character varying NOT NULL
-);
-
-ALTER TABLE ONLY public.schema_migrations
-    ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (version);
-'''
+              ddl = "\n\nCREATE TABLE public.schema_migrations (\n    version character varying NOT NULL\n);\n\nALTER TABLE ONLY public.schema_migrations\n    ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (version);\n"
               text = text.replace(marker, ddl + marker, 1)
           path.write_text(text)
           PY
