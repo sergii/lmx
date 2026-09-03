@@ -16,11 +16,10 @@ import { Button } from "@/components/ui/button"
 import AppLayout from "@/layouts/app-layout"
 import { cn } from "@/lib/utils"
 
+type JsonScalar = string | number | boolean | null
+
 type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
+  | JsonScalar
   | JsonValue[]
   | { [key: string]: JsonValue }
 
@@ -71,10 +70,12 @@ function candidateName(candidate: CandidateSummary) {
   const name = [candidate.first_name, candidate.last_name]
     .filter(Boolean)
     .join(" ")
-  return name || candidate.email || "Candidate"
+  if (name.length > 0) return name
+
+  return candidate.email ?? "Candidate"
 }
 
-function isScalar(value: JsonValue) {
+function isScalar(value: JsonValue): value is JsonScalar {
   return (
     value === null ||
     typeof value === "string" ||
@@ -83,7 +84,7 @@ function isScalar(value: JsonValue) {
   )
 }
 
-function scalarText(value: JsonValue) {
+function scalarText(value: JsonScalar) {
   if (value === null) return "null"
   if (typeof value === "boolean") return value ? "Yes" : "No"
   return String(value)
@@ -183,7 +184,7 @@ export default function ProfileShow({
   const [parseError, setParseError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
-  function useSnapshot(version: ProfileVersion) {
+  function loadSnapshotDraft(version: ProfileVersion) {
     setEditor(JSON.stringify(version.profile, null, 2))
     setParseError(null)
   }
@@ -335,54 +336,50 @@ export default function ProfileShow({
                 {versions.length}
               </Badge>
             </div>
-            <div className="max-h-[42rem] overflow-y-auto p-2">
+            <div className="max-h-[42rem] space-y-1 overflow-y-auto p-2">
               {versions.map((version) => {
                 const selected = selectedVersion?.id === version.id
                 const latest = latest_profile?.id === version.id
 
                 return (
-                  <button
+                  <div
                     key={version.id}
-                    type="button"
-                    onClick={() => setSelectedVersionId(version.id)}
                     className={cn(
-                      "hover:bg-muted/60 w-full rounded-lg p-3 text-left transition-colors",
+                      "hover:bg-muted/60 rounded-lg transition-colors",
                       selected && "bg-muted",
                     )}
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">v{version.version_number}</span>
-                      {latest && <Badge variant="outline">Latest</Badge>}
-                      <span className="text-muted-foreground ml-auto text-xs">
-                        {originLabel(version.origin)}
-                      </span>
-                    </div>
-                    <p className="text-muted-foreground mt-1 text-xs">
-                      {dateTime(version.created_at)}
-                    </p>
-                    <div className="mt-2 flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedVersionId(version.id)}
+                      className="w-full p-3 pb-2 text-left"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">
+                          v{version.version_number}
+                        </span>
+                        {latest && <Badge variant="outline">Latest</Badge>}
+                        <span className="text-muted-foreground ml-auto text-xs">
+                          {originLabel(version.origin)}
+                        </span>
+                      </div>
+                      <p className="text-muted-foreground mt-1 text-xs">
+                        {dateTime(version.created_at)}
+                      </p>
+                    </button>
+                    <div className="flex items-center justify-between gap-2 px-3 pb-3">
                       <span className="text-muted-foreground font-mono text-[11px]">
                         {version.content_digest.slice(0, 10)}…
                       </span>
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          useSnapshot(version)
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.stopPropagation()
-                            useSnapshot(version)
-                          }
-                        }}
+                      <button
+                        type="button"
+                        onClick={() => loadSnapshotDraft(version)}
                         className="text-primary text-xs font-medium hover:underline"
                       >
                         Use as draft
-                      </span>
+                      </button>
                     </div>
-                  </button>
+                  </div>
                 )
               })}
               {versions.length === 0 && (
