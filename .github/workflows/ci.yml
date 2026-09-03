@@ -112,8 +112,11 @@ jobs:
         run: npm ci
       - name: Lint JavaScript
         run: npm run lint
-      - name: Check formatting
-        run: npm run format
+      - name: Diagnose formatting
+        run: |
+          npx prettier --write app/javascript/pages/applications/index.tsx
+          git diff -- app/javascript/pages/applications/index.tsx
+          exit 1
       - name: Type check
         run: npm run check
 
@@ -190,8 +193,20 @@ jobs:
           cache-dependency-path: application/package-lock.json
       - name: Install JS dependencies
         run: npm ci
-      - name: Prepare PostgreSQL test schema
-        run: bin/rails db:test:prepare
+      - name: Diagnose PostgreSQL structure
+        run: |
+          bin/rails db:test:prepare
+          bin/rails db:migrate
+          bin/rails db:structure:dump
+          git diff -- db/structure.sql
+          exit 1
+      - name: Upload generated PostgreSQL structure
+        uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: generated-structure
+          path: ${{ github.workspace }}/application/db/structure.sql
+          if-no-files-found: error
       - name: Run test suite, including the direct RLS boundary proof
         run: bin/rspec
       - name: Keep screenshots from failed system tests
