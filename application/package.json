@@ -6,7 +6,7 @@
     "check": "tsc -p tsconfig.app.json && tsc -p tsconfig.node.json",
     "lint": "eslint '*.{js,mjs,cjs,ts}' app/javascript/ --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint '*.{js,mjs,cjs,ts}' app/javascript/ --fix",
-    "format": "prettier --write app/javascript/pages/openings/show.tsx && git diff -- app/javascript/pages/openings/show.tsx && exit 1",
+    "format": "prettier --check 'app/javascript' '*.{js,mjs,cjs,ts}'",
     "format:fix": "prettier --write 'app/javascript' '*.{js,mjs,cjs,ts}'"
   },
   "dependencies": {
