@@ -3611,7 +3611,7 @@ ALTER TABLE public.workspace_invitations ENABLE ROW LEVEL SECURITY;
 \unrestrict aCEdIkOFoW3AEkakubKTAAQk8vqe1NOGTvMEBscl4066JwfmLj8l4fYOQKu9Ds2
 
 
-INSERT INTO "schema_migrations" (version) VALUES
+INSERT INTO public.schema_migrations (version) VALUES
 ('20250801153827'),
 ('20250801153828'),
 ('20260723040000'),
