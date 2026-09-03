@@ -1,21 +1,29 @@
-# LMX donor adoption agent instructions
+# LMX application coding agent instructions
 
-This repository is a temporary application-adoption workbench. Donor `main` is frozen. All LMX implementation work here is based on `lmx/adoption` and will later be imported as a squashed snapshot into `sergii/lmx/application/`.
+This directory contains the canonical Rails application for LMX. The product/domain specification lives in the repository root under `../spec/`, and machine-readable ownership lives in `../config/ownership.yml`.
 
 ## Before changing code
 
-Read:
+Read the minimum relevant canonical context from the repository root:
+
+- `../spec/README.md`
+- `../spec/domain.md`
+- `../spec/bounded-contexts.md`
+- `../spec/architecture.md`
+- `../spec/development/parallel-development.md`
+- `../spec/development/ownership.md`
+- `../config/ownership.yml`
+
+Then read:
 
 - `packs/README.md`
 - `packs/OWNERSHIP.md`
 - the target package `package.yml`
 - relevant tests and public application services
 
-The canonical LMX architecture and domain specification live in `sergii/lmx/spec/`.
-
 ## Concurrent work
 
-Do not have multiple agents commit directly to `lmx/adoption` at the same time. Each concurrent worker branches from the latest `lmx/adoption` commit.
+Use one branch and one worktree per concurrent worker, based on the latest canonical `sergii/lmx` integration state. Keep one primary package or one explicit cross-cutting integration scope per task.
 
 Examples:
 
@@ -26,9 +34,7 @@ feat/talent-profile-core
 feat/mcp-read-contracts
 ```
 
-Each worker should use a separate git worktree and one primary package.
-
-Merge small coherent branches back into `lmx/adoption`. Never merge LMX adoption work into donor `main`.
+Merge small coherent slices back into the canonical repository. The historical donor repository is archival and is not a development target.
 
 ## Package boundary
 
@@ -53,7 +59,7 @@ Coordinate before editing these while another lane is active:
 - `package.json` / lockfile
 - `config/application.rb`
 - `config/routes.rb`
-- `.github/workflows/**`
+- root `.github/workflows/**`
 - shared RLS infrastructure
 - `db/structure.sql`
 - repository-wide UI theme/tokens
