@@ -1,0 +1,52 @@
+name: Canonical application import
+
+on:
+  push:
+    branches:
+      - chore/import-lmx-application
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout canonical repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Import donor snapshot
+        shell: bash
+        env:
+          DONOR_REPOSITORY: sergii/a322043jkf844f93mrfff
+          DONOR_SHA: 0cb0ba29535b0f5d77f543f24d386feb948f8f02
+        run: |
+          set -euo pipefail
+
+          test ! -e application
+
+          git clone --quiet "https://github.com/${DONOR_REPOSITORY}.git" /tmp/lmx-donor
+          git -C /tmp/lmx-donor checkout --quiet --detach "${DONOR_SHA}"
+
+          mkdir application
+          rsync -a --exclude='.git/' /tmp/lmx-donor/ application/
+
+          cat > application/.lmx-donor.yml <<EOF
+          version: 1
+          repository: ${DONOR_REPOSITORY}
+          branch: lmx/adoption
+          commit: ${DONOR_SHA}
+          imported_as: squashed_snapshot
+          canonical_path: application/
+          EOF
+
+          rm .github/workflows/canonical-import.yml
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Import donor application snapshot" -m "Donor: ${DONOR_REPOSITORY}" -m "Branch: lmx/adoption" -m "Donor-SHA: ${DONOR_SHA}"
+          git push origin HEAD:chore/import-lmx-application
