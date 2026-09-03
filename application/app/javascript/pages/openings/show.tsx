@@ -19,9 +19,9 @@ type JsonValue =
   | boolean
   | null
   | JsonValue[]
-  | { [key: string]: JsonValue }
+  | JsonRecord
 
-type JsonRecord = { [key: string]: JsonValue }
+interface JsonRecord extends Record<string, JsonValue> {}
 
 interface Company {
   id: string
