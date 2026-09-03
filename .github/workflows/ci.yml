@@ -42,6 +42,12 @@ jobs:
         with:
           ruby-version: 4.0.1
           bundler-cache: true
+      - name: Check canonical/runtime configuration drift
+        run: |
+          cmp ../config/sources.yml config/sources.yml
+          cmp ../config/sources.schema.json config/sources.schema.json
+          cmp ../config/profiles/default.yml config/profiles/default.yml
+          cmp ../config/profiles.schema.json config/profiles.schema.json
       - name: Validate LMX configuration contract
         run: bin/rails lmx:config:validate
       - name: Validate package system
