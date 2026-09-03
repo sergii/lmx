@@ -230,7 +230,12 @@ export default function OpeningsIndex({
                     >
                       <td className="px-4 py-4">
                         <div className="flex max-w-md flex-wrap items-center gap-2">
-                          <span className="font-semibold">{opening.title}</span>
+                          <Link
+                            href={`/openings/${opening.id}`}
+                            className="font-semibold hover:underline"
+                          >
+                            {opening.title}
+                          </Link>
                           <Badge
                             variant={lifecycleVariant(opening.lifecycle_state)}
                           >
