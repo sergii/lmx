@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "time"
+
 class OpeningDetailQuery
   FACT_KEYS = {
     compensation: %w[compensation_original_text compensation_text salary_text compensation salary],
@@ -14,13 +16,15 @@ class OpeningDetailQuery
   end
 
   def initialize(workspace_id:, user_id:, opening_id:, market_api: MarketCatalog::Api,
-    talent_api: TalentProfile::Api, intelligence_api: Intelligence::Api)
+    talent_api: TalentProfile::Api, intelligence_api: Intelligence::Api,
+    personal_api: PersonalCrm::Api)
     @workspace_id = workspace_id
     @user_id = user_id
     @opening_id = opening_id
     @market_api = market_api
     @talent_api = talent_api
     @intelligence_api = intelligence_api
+    @personal_api = personal_api
     @companies = {}
   end
 
@@ -29,6 +33,7 @@ class OpeningDetailQuery
     posting_contexts = posting_contexts(opening)
     candidate = linked_candidate
     assessment = latest_assessment(opening, candidate:)
+    personal_context = personal_context(opening, candidate:)
 
     {
       opening: opening_props(opening, posting_contexts:),
@@ -36,14 +41,15 @@ class OpeningDetailQuery
       parties: party_props(opening.fetch(:parties)),
       postings: posting_contexts.map { posting_props(_1) },
       candidate: candidate_props(candidate),
-      assessment: assessment_props(assessment, candidate:, opening:)
+      assessment: assessment_props(assessment, candidate:, opening:),
+      personal_crm: personal_crm_props(personal_context)
     }
   end
 
   private
 
   attr_reader :workspace_id, :user_id, :opening_id, :market_api, :talent_api,
-    :intelligence_api, :companies
+    :intelligence_api, :personal_api, :companies
 
   def opening_props(opening, posting_contexts:)
     documents = fact_documents(opening, posting_contexts)
@@ -163,6 +169,16 @@ class OpeningDetailQuery
     nil
   end
 
+  def personal_context(opening, candidate:)
+    return unless candidate
+
+    personal_api.fetch_opening_context(
+      workspace_id:,
+      candidate_id: candidate.fetch(:id),
+      job_opening_id: opening.fetch(:id)
+    )
+  end
+
   def candidate_props(candidate)
     return unless candidate
 
@@ -171,6 +187,31 @@ class OpeningDetailQuery
       name: [ candidate[:first_name], candidate[:last_name] ].compact.join(" "),
       profile_version_id: candidate.dig(:profile_version, :id),
       profile_version_number: candidate.dig(:profile_version, :version_number)
+    }
+  end
+
+  def personal_crm_props(context)
+    return unless context
+
+    disposition = context[:disposition]
+    {
+      disposition: disposition && {
+        id: disposition.fetch(:id),
+        state: disposition.fetch(:state),
+        decided_at: iso8601(disposition[:decided_at])
+      },
+      applications: context.fetch(:applications).map do |application|
+        {
+          id: application.fetch(:id),
+          via_posting_id: application[:via_posting_id],
+          stage: application.fetch(:stage),
+          started_at: iso8601(application[:started_at]),
+          applied_at: iso8601(application[:applied_at]),
+          channel: application[:channel],
+          next_action: application[:next_action],
+          next_action_at: iso8601(application[:next_action_at])
+        }
+      end
     }
   end
 
@@ -282,6 +323,9 @@ class OpeningDetailQuery
   end
 
   def iso8601(value)
-    value&.iso8601
+    return if value.nil?
+    return value.iso8601 if value.respond_to?(:iso8601)
+
+    Time.iso8601(value.to_s).iso8601
   end
 end
