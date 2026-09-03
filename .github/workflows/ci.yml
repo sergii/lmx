@@ -48,7 +48,12 @@ jobs:
         run: |
           bin/rails db:test:prepare
           bin/rails db:migrate
-          bin/rails db:structure:dump
+          docker run --rm --network host \
+            -e PGPASSWORD="$POSTGRES_PASSWORD" \
+            postgres:18.4 \
+            pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" \
+              --schema-only --no-privileges --no-owner "$POSTGRES_TEST_DATABASE" \
+            > db/structure.sql
       - name: Commit generated structure
         run: |
           git config user.name "github-actions[bot]"
