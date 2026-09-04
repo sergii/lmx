@@ -97,8 +97,8 @@ export default function NewOpening() {
               Without URL
             </div>
             <p className="text-muted-foreground mt-2 text-sm">
-              Useful for recruiter messages, referrals, private roles, or
-              opportunities you only know from a conversation.
+              Useful for recruiter messages, referrals, or opportunities that do
+              not have a public vacancy page yet.
             </p>
           </div>
         </div>
@@ -180,9 +180,8 @@ export default function NewOpening() {
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-5">
             <p className="text-muted-foreground max-w-lg text-xs leading-relaxed">
-              Manual ingress is provenance, not a new acquisition source. The
-              accepted opening remains canonical Market Catalog state and the
-              submission is recorded through the durable command/event boundary.
+              Role, company and market facts become canonical Market Catalog
+              state. Notes stay in your workspace-scoped command/event history.
             </p>
             <Button
               type="submit"
