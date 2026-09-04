@@ -57,19 +57,19 @@ module Integration
           error_response(request.fetch("id"), METHOD_NOT_FOUND, "Method not found")
         end
       rescue EraConflict => error
-        error_response(message.is_a?(Hash) ? message["id"] || message[:id] : nil, INVALID_REQUEST, error.message)
+        error_response(request_id(message), INVALID_REQUEST, error.message)
       rescue UnsupportedProtocolVersion => error
         error_response(
-          message.is_a?(Hash) ? message["id"] || message[:id] : nil,
+          request_id(message),
           UNSUPPORTED_PROTOCOL_VERSION,
           "Unsupported protocol version",
           supported: [ MODERN_PROTOCOL_VERSION ],
           requested: error.requested
         )
       rescue ArgumentError, KeyError => error
-        error_response(message.is_a?(Hash) ? message["id"] || message[:id] : nil, INVALID_PARAMS, error.message)
+        error_response(request_id(message), INVALID_PARAMS, error.message)
       rescue StandardError
-        error_response(message.is_a?(Hash) ? message["id"] || message[:id] : nil, INTERNAL_ERROR, "Internal error")
+        error_response(request_id(message), INTERNAL_ERROR, "Internal error")
       end
 
       private
@@ -88,12 +88,11 @@ module Integration
       attr_reader :read_adapter, :command_adapter, :identity, :server_name, :server_version
 
       def handle_notification(request)
-        case request.fetch("method")
-        when "notifications/initialized"
-          lock_era!(:legacy)
-          @legacy_initialized = true
-        end
+        return nil unless request.fetch("method") == "notifications/initialized"
+        return nil if @era == :modern
 
+        lock_era!(:legacy)
+        @legacy_initialized = true
         nil
       end
 
@@ -118,8 +117,12 @@ module Integration
 
       def handle_ping(request)
         modern = modern_request?(request)
-        lock_era!(modern ? :modern : (@era || :legacy))
-        ensure_legacy_ready! unless modern
+        if modern
+          lock_era!(:modern)
+          validate_modern_request!(request)
+        elsif @era == :modern
+          raise EraConflict, "MCP connection is already locked to modern lifecycle"
+        end
 
         success_response(request.fetch("id"), {}, modern:)
       end
@@ -130,9 +133,7 @@ module Integration
         validate_modern_request!(request) if modern
         ensure_legacy_ready! unless modern
 
-        result = {
-          "tools" => all_tools
-        }
+        result = { "tools" => all_tools }
         if modern
           result["ttlMs"] = 0
           result["cacheScope"] = "private"
@@ -157,9 +158,7 @@ module Integration
         adapter, context = adapter_and_context(name:, request_id: request.fetch("id"))
         raise ArgumentError, "unknown MCP tool: #{name}" unless adapter
 
-        tool_result = adapter.call(name:, arguments:, context:)
-        result = stringify_keys(tool_result)
-
+        result = stringify_keys(adapter.call(name:, arguments:, context:))
         success_response(request.fetch("id"), result, modern:)
       end
 
@@ -268,6 +267,12 @@ module Integration
         raise ArgumentError, "params must be an object" unless params.is_a?(Hash)
 
         stringify_keys(params)
+      end
+
+      def request_id(message)
+        return unless message.is_a?(Hash)
+
+        message["id"] || message[:id]
       end
 
       def stringify_keys(value)
