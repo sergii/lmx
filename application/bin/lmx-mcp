@@ -5,8 +5,10 @@ ENV["RAILS_LOG_TO_STDOUT"] = nil
 
 require_relative "../config/environment"
 
-server = Integration::McpRuntime.build
-Integration::Mcp::StdioTransport.new(server:).open
+begin
+  server = Integration::McpRuntime.build
+  Integration::Mcp::StdioTransport.new(server:).open
 rescue ArgumentError, KeyError => error
   warn("LMX MCP configuration error: #{error.message}")
   exit(1)
+end
