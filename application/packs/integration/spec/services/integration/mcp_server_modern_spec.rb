@@ -94,6 +94,6 @@ RSpec.describe Integration::Mcp::Server, "modern runtime hardening" do
 
     expect(response.dig("error", "code")).to eq(described_class::INVALID_PARAMS)
     expect(response.dig("error", "message")).to include(described_class::IDEMPOTENCY_KEY_META_KEY)
-    expect(command_adapter).not_to have_received(:call) if RSpec::Mocks.space.proxy_for(command_adapter).messages_received.empty?
+    expect(command_adapter).not_to have_received(:call)
   end
 end
