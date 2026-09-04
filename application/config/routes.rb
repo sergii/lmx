@@ -2,6 +2,8 @@
 
 Rails.application.routes.draw do
   post "mcp", to: "mcp#create", as: :mcp
+  get "/.well-known/oauth-protected-resource/mcp", to: "mcp#oauth_protected_resource_metadata",
+    as: :mcp_oauth_protected_resource_metadata
 
   get  "sign_in", to: "sessions#new", as: :sign_in
   post "sign_in", to: "sessions#create"
