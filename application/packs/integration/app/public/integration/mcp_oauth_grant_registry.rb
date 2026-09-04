@@ -23,26 +23,28 @@ module Integration
       client: nil
     )
       with_workspace(workspace_id) do |organization|
-        token_client_id = required_string(client_id, :client_id)
-        normalized_principal = required_string(principal, :principal)
-        manager = required_string(managed_by, :managed_by)
+        McpOauthGrant.transaction do
+          token_client_id = required_string(client_id, :client_id)
+          normalized_principal = required_string(principal, :principal)
+          manager = required_string(managed_by, :managed_by)
 
-        grant = McpOauthGrant.create!(
-          organization:,
-          issuer: required_string(issuer, :issuer),
-          subject: required_string(subject, :subject),
-          client_id: token_client_id,
-          principal: normalized_principal,
-          credential: required_string(credential, :credential),
-          actor: optional_string(actor) || normalized_principal,
-          executor: optional_string(executor) || "oauth:#{token_client_id}",
-          client: optional_string(client) || token_client_id,
-          capabilities: normalize_capabilities(capabilities),
-          created_by: manager
-        )
+          grant = McpOauthGrant.create!(
+            organization:,
+            issuer: required_string(issuer, :issuer),
+            subject: required_string(subject, :subject),
+            client_id: token_client_id,
+            principal: normalized_principal,
+            credential: required_string(credential, :credential),
+            actor: optional_string(actor) || normalized_principal,
+            executor: optional_string(executor) || "oauth:#{token_client_id}",
+            client: optional_string(client) || token_client_id,
+            capabilities: normalize_capabilities(capabilities),
+            created_by: manager
+          )
 
-        record_event!(grant, action: "created", managed_by: manager)
-        grant.snapshot
+          record_event!(grant, action: "created", managed_by: manager)
+          grant.snapshot
+        end
       end
     rescue ActiveRecord::RecordNotUnique
       raise Conflict, "OAuth grant external identity or credential already exists"
@@ -54,39 +56,45 @@ module Integration
       mutate_grant(workspace_id:, grant_id:) do |grant|
         manager = required_string(managed_by, :managed_by)
         normalized = normalize_capabilities(capabilities)
-        return grant.snapshot if grant.capabilities == normalized
 
-        grant.update!(capabilities: normalized)
-        record_event!(grant, action: "capabilities_updated", managed_by: manager)
-        grant.snapshot
+        if grant.capabilities == normalized
+          grant.snapshot
+        else
+          grant.update!(capabilities: normalized)
+          record_event!(grant, action: "capabilities_updated", managed_by: manager)
+          grant.snapshot
+        end
       end
     end
 
     def revoke_grant(workspace_id:, grant_id:, managed_by:, reason: nil, revoked_at: Time.current)
       mutate_grant(workspace_id:, grant_id:) do |grant|
-        return grant.snapshot unless grant.active?
+        if grant.active?
+          manager = required_string(managed_by, :managed_by)
+          timestamp = revoked_at.respond_to?(:to_time) ? revoked_at.to_time : nil
+          raise InvalidInput, "revoked_at must be time-like" unless timestamp
 
-        manager = required_string(managed_by, :managed_by)
-        timestamp = revoked_at.respond_to?(:to_time) ? revoked_at.to_time : nil
-        raise InvalidInput, "revoked_at must be time-like" unless timestamp
+          normalized_reason = optional_string(reason)
+          grant.update!(
+            revoked_at: timestamp,
+            revoked_by: manager,
+            revoke_reason: normalized_reason
+          )
+          record_event!(grant, action: "revoked", managed_by: manager, reason: normalized_reason)
+        end
 
-        grant.update!(
-          revoked_at: timestamp,
-          revoked_by: manager,
-          revoke_reason: optional_string(reason)
-        )
-        record_event!(grant, action: "revoked", managed_by: manager, reason: optional_string(reason))
         grant.snapshot
       end
     end
 
     def restore_grant(workspace_id:, grant_id:, managed_by:)
       mutate_grant(workspace_id:, grant_id:) do |grant|
-        return grant.snapshot if grant.active?
+        unless grant.active?
+          manager = required_string(managed_by, :managed_by)
+          grant.update!(revoked_at: nil, revoked_by: nil, revoke_reason: nil)
+          record_event!(grant, action: "restored", managed_by: manager)
+        end
 
-        manager = required_string(managed_by, :managed_by)
-        grant.update!(revoked_at: nil, revoked_by: nil, revoke_reason: nil)
-        record_event!(grant, action: "restored", managed_by: manager)
         grant.snapshot
       end
     end
