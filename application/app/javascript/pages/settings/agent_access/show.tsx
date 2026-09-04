@@ -36,9 +36,7 @@ type Grant = {
   created_at: string | null
   updated_at: string | null
   authorization_kind:
-    | "workspace_membership"
-    | "orphaned_workspace_user"
-    | "service_principal"
+    "workspace_membership" | "orphaned_workspace_user" | "service_principal"
   membership: Membership | null
   workspace_capabilities: string[] | null
   effective_capabilities: string[]
@@ -84,8 +82,12 @@ function capabilityBadges(values: string[], emptyLabel = "None") {
 
 export default function AgentAccessSettings({ grants }: { grants: Grant[] }) {
   const activeCount = grants.filter((grant) => grant.status === "active").length
-  const blockedCount = grants.filter((grant) => grant.status === "blocked").length
-  const revokedCount = grants.filter((grant) => grant.status === "revoked").length
+  const blockedCount = grants.filter(
+    (grant) => grant.status === "blocked",
+  ).length
+  const revokedCount = grants.filter(
+    (grant) => grant.status === "revoked",
+  ).length
 
   return (
     <AppLayout
@@ -135,9 +137,9 @@ export default function AgentAccessSettings({ grants }: { grants: Grant[] }) {
               <h2 className="text-sm font-medium">Authorization composition</h2>
               <p className="text-muted-foreground mt-1 text-sm">
                 The token scope is verified on every request and is not stored
-                here. For workspace users, runtime access is the intersection
-                of token scopes, the stored grant, and the current workspace
-                role maximum.
+                here. For workspace users, runtime access is the intersection of
+                token scopes, the stored grant, and the current workspace role
+                maximum.
               </p>
               <p className="text-muted-foreground mt-3 font-mono text-xs">
                 token scopes ∩ stored grant ∩ workspace maximum = runtime
@@ -183,7 +185,7 @@ export default function AgentAccessSettings({ grants }: { grants: Grant[] }) {
                               : "Service principal"}
                           </Badge>
                         </div>
-                        <p className="text-muted-foreground mt-1 break-all text-sm">
+                        <p className="text-muted-foreground mt-1 text-sm break-all">
                           {grant.subject} · {grant.client_id}
                         </p>
                       </div>
@@ -195,8 +197,10 @@ export default function AgentAccessSettings({ grants }: { grants: Grant[] }) {
 
                     <dl className="mt-5 grid gap-4 rounded-lg border p-4 text-sm sm:grid-cols-2">
                       <div>
-                        <dt className="text-muted-foreground text-xs">Issuer</dt>
-                        <dd className="mt-1 break-all font-mono text-xs">
+                        <dt className="text-muted-foreground text-xs">
+                          Issuer
+                        </dt>
+                        <dd className="mt-1 font-mono text-xs break-all">
                           {grant.issuer}
                         </dd>
                       </div>
@@ -204,7 +208,7 @@ export default function AgentAccessSettings({ grants }: { grants: Grant[] }) {
                         <dt className="text-muted-foreground text-xs">
                           Local principal
                         </dt>
-                        <dd className="mt-1 break-all font-mono text-xs">
+                        <dd className="mt-1 font-mono text-xs break-all">
                           {grant.principal}
                         </dd>
                       </div>
@@ -212,7 +216,7 @@ export default function AgentAccessSettings({ grants }: { grants: Grant[] }) {
                         <dt className="text-muted-foreground text-xs">
                           Executor
                         </dt>
-                        <dd className="mt-1 break-all font-mono text-xs">
+                        <dd className="mt-1 font-mono text-xs break-all">
                           {grant.executor}
                         </dd>
                       </div>
