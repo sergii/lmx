@@ -31,18 +31,17 @@ RSpec.describe "MCP HTTP endpoint", type: :request do
       LMX_MCP_OAUTH_AUTHORIZATION_SERVERS
       LMX_MCP_OAUTH_SCOPES
       LMX_MCP_OAUTH_RESOURCE_NAME
+      LMX_MCP_OAUTH_INTROSPECTION_ENDPOINT
+      LMX_MCP_OAUTH_INTROSPECTION_CLIENT_ID
+      LMX_MCP_OAUTH_INTROSPECTION_CLIENT_SECRET
+      LMX_MCP_OAUTH_GRANTS
     ]
     previous = keys.to_h { |key| [ key, ENV[key] ] }
 
     ENV["LMX_MCP_HTTP_CREDENTIALS"] = credential_config
     ENV["LMX_MCP_HTTP_ALLOWED_HOSTS"] = "www.example.com"
     ENV["LMX_MCP_HTTP_ALLOWED_ORIGINS"] = "https://client.example.test"
-    %w[
-      LMX_MCP_OAUTH_RESOURCE
-      LMX_MCP_OAUTH_AUTHORIZATION_SERVERS
-      LMX_MCP_OAUTH_SCOPES
-      LMX_MCP_OAUTH_RESOURCE_NAME
-    ].each { ENV.delete(_1) }
+    keys.grep(/LMX_MCP_OAUTH/).each { ENV.delete(_1) }
 
     example.run
   ensure
@@ -77,6 +76,40 @@ RSpec.describe "MCP HTTP endpoint", type: :request do
     ENV["LMX_MCP_OAUTH_RESOURCE_NAME"] = "LMX MCP Test"
   end
 
+  def configure_oauth_verifier
+    configure_oauth_metadata
+    ENV["LMX_MCP_OAUTH_INTROSPECTION_ENDPOINT"] = "https://auth.example.test/oauth2/introspect"
+    ENV["LMX_MCP_OAUTH_INTROSPECTION_CLIENT_ID"] = "lmx-resource-server"
+    ENV["LMX_MCP_OAUTH_INTROSPECTION_CLIENT_SECRET"] = "resource-server-secret"
+    ENV["LMX_MCP_OAUTH_GRANTS"] = JSON.generate(
+      [
+        {
+          issuer: "https://auth.example.test/issuer",
+          subject: "external-user-123",
+          client_id: "chatgpt-client",
+          workspace_id: "org_01mcphttp",
+          principal: "user:serhii",
+          credential: "mcp-oauth:chatgpt",
+          actor: "human:serhii",
+          executor: "agent:chatgpt",
+          client: "chatgpt",
+          capabilities: %w[read:openings submit:openings]
+        }
+      ]
+    )
+  end
+
+  def oauth_claims(subject: "external-user-123", scopes: %w[read:openings submit:openings])
+    Integration::Mcp::OauthIntrospectionClient::Claims.new(
+      issuer: "https://auth.example.test/issuer",
+      subject:,
+      client_id: "chatgpt-client",
+      scopes:,
+      audiences: [ "https://www.example.com/mcp" ],
+      expires_at: Time.now + 300
+    )
+  end
+
   it "serves authenticated modern discovery through POST /mcp" do
     body = {
       jsonrpc: "2.0",
@@ -91,6 +124,77 @@ RSpec.describe "MCP HTTP endpoint", type: :request do
     expect(response.parsed_body.dig("result", "supportedVersions")).to eq([ "2026-07-28" ])
     expect(response.parsed_body.dig("result", "_meta", Integration::Mcp::Server::SERVER_INFO_META_KEY, "name")).to eq("lmx")
     expect(response.headers["Cache-Control"]).to eq("no-store")
+  end
+
+  it "accepts an externally verified OAuth access token without bootstrap credentials" do
+    ENV.delete("LMX_MCP_HTTP_CREDENTIALS")
+    configure_oauth_verifier
+    verifier = instance_double(
+      Integration::Mcp::OauthIntrospectionClient,
+      verify: oauth_claims
+    )
+    allow(Integration::Mcp::OauthIntrospectionClient).to receive(:new).and_return(verifier)
+
+    body = {
+      jsonrpc: "2.0",
+      id: "discover-oauth-1",
+      method: "server/discover",
+      params: { _meta: modern_meta }
+    }
+
+    post "/mcp",
+      params: JSON.generate(body),
+      headers: mcp_headers(method: "server/discover", authorization: "Bearer oauth-token")
+
+    expect(response).to have_http_status(:ok)
+    expect(response.parsed_body.dig("result", "supportedVersions")).to eq([ "2026-07-28" ])
+  end
+
+  it "rejects a valid OAuth token that has no local issuer subject client grant" do
+    ENV.delete("LMX_MCP_HTTP_CREDENTIALS")
+    configure_oauth_verifier
+    verifier = instance_double(
+      Integration::Mcp::OauthIntrospectionClient,
+      verify: oauth_claims(subject: "unmapped-user")
+    )
+    allow(Integration::Mcp::OauthIntrospectionClient).to receive(:new).and_return(verifier)
+
+    body = {
+      jsonrpc: "2.0",
+      id: "discover-oauth-unmapped",
+      method: "server/discover",
+      params: { _meta: modern_meta }
+    }
+
+    post "/mcp",
+      params: JSON.generate(body),
+      headers: mcp_headers(method: "server/discover", authorization: "Bearer oauth-token")
+
+    expect(response).to have_http_status(:unauthorized)
+    expect(response.parsed_body).to eq("error" => "unauthorized")
+  end
+
+  it "returns service unavailable when the external OAuth verifier is unavailable" do
+    ENV.delete("LMX_MCP_HTTP_CREDENTIALS")
+    configure_oauth_verifier
+    verifier = instance_double(Integration::Mcp::OauthIntrospectionClient)
+    allow(verifier).to receive(:verify)
+      .and_raise(Integration::Mcp::OauthIntrospectionClient::Unavailable, "authorization server unavailable")
+    allow(Integration::Mcp::OauthIntrospectionClient).to receive(:new).and_return(verifier)
+
+    body = {
+      jsonrpc: "2.0",
+      id: "discover-oauth-down",
+      method: "server/discover",
+      params: { _meta: modern_meta }
+    }
+
+    post "/mcp",
+      params: JSON.generate(body),
+      headers: mcp_headers(method: "server/discover", authorization: "Bearer oauth-token")
+
+    expect(response).to have_http_status(:service_unavailable)
+    expect(response.parsed_body).to eq("error" => "mcp_oauth_unavailable")
   end
 
   it "returns an HTTP bearer challenge before MCP dispatch when authorization is missing" do
