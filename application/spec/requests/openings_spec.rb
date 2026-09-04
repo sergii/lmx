@@ -77,9 +77,9 @@ RSpec.describe "Openings inbox", type: :request do
     expect(inertia_component).to eq("openings/index")
     expect(response.body).to include("Senior Ruby Engineer")
     expect(response.body).to include("Example Labs")
-    expect(response.body).to include('\"key\":\"dou\"')
-    expect(response.body).to include('\"opportunity_score\":92.0')
-    expect(response.body).to include('\"action_priority\":87.0')
+    expect(response.body).to include('"key":"dou"')
+    expect(response.body).to include('"opportunity_score":92.0')
+    expect(response.body).to include('"action_priority":87.0')
     expect(response.body).to include("Strong Rails and infrastructure overlap")
   end
 
@@ -94,7 +94,7 @@ RSpec.describe "Openings inbox", type: :request do
     expect(response).to have_http_status(:success)
     expect(inertia_component).to eq("openings/index")
     expect(response.body).to include("Platform Engineer")
-    expect(response.body).to include('\"candidate\":null')
+    expect(response.body).to include('"candidate":null')
   end
 
   it "renders the manual opening ingress" do
