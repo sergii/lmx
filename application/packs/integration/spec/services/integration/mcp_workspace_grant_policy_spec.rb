@@ -16,6 +16,15 @@ RSpec.describe Integration::Mcp::WorkspaceGrantPolicy do
     }
   end
 
+  it "keeps the explicit policy allowlist synchronized with published Integration capabilities" do
+    published = (
+      Integration::Read::Contracts.all.map(&:required_capability) +
+      Integration::Command::Contracts.all.map(&:required_capability)
+    ).uniq.sort
+
+    expect(described_class::WORKSPACE_WIDE_CAPABILITIES.sort).to eq(published)
+  end
+
   it "allows the current workspace-wide MCP capabilities for active internal roles" do
     %w[workspace_admin recruiting_ops_lead recruiter].each do |role|
       expect(policy.capabilities_for(membership(role:))).to eq(
