@@ -77,9 +77,9 @@ RSpec.describe "Openings inbox", type: :request do
     expect(inertia_component).to eq("openings/index")
     expect(response.body).to include("Senior Ruby Engineer")
     expect(response.body).to include("Example Labs")
-    expect(response.body).to include('"key":"dou"')
-    expect(response.body).to include('"opportunity_score":92.0')
-    expect(response.body).to include('"action_priority":87.0')
+    expect(response.body).to include('\"key\":\"dou\"')
+    expect(response.body).to include('\"opportunity_score\":92.0')
+    expect(response.body).to include('\"action_priority\":87.0')
     expect(response.body).to include("Strong Rails and infrastructure overlap")
   end
 
@@ -94,7 +94,7 @@ RSpec.describe "Openings inbox", type: :request do
     expect(response).to have_http_status(:success)
     expect(inertia_component).to eq("openings/index")
     expect(response.body).to include("Platform Engineer")
-    expect(response.body).to include('"candidate":null')
+    expect(response.body).to include('\"candidate\":null')
   end
 
   it "renders the manual opening ingress" do
@@ -135,7 +135,7 @@ RSpec.describe "Openings inbox", type: :request do
   end
 
   it "captures URL evidence, infers a known source, and does not fork an existing posting" do
-    params = {
+    request_params = {
       title: "Senior Ruby Developer",
       company_name: "Example Product",
       url: "https://jobs.dou.ua/companies/example/vacancies/123/#details",
@@ -143,7 +143,7 @@ RSpec.describe "Openings inbox", type: :request do
       idempotency_key: "manual-url-1"
     }
 
-    post openings_path, params:
+    post openings_path, params: request_params
 
     opening = redirected_opening
     expect(opening.fetch(:job_posting_ids).size).to eq(1)
@@ -157,7 +157,7 @@ RSpec.describe "Openings inbox", type: :request do
     expect(posting.fetch(:metadata)).not_to have_key("submitted_by_workspace")
 
     expect do
-      post openings_path, params: params.merge(idempotency_key: "manual-url-2")
+      post openings_path, params: request_params.merge(idempotency_key: "manual-url-2")
     end.to change(
       Platform::DomainEvent.where(event_type: "job_opening.manual_submission_recorded"), :count
     ).by(1).and change(
@@ -170,17 +170,17 @@ RSpec.describe "Openings inbox", type: :request do
   end
 
   it "replays the same manual command without duplicating canonical state" do
-    params = {
+    request_params = {
       title: "Staff Backend Engineer",
       idempotency_key: "manual-idempotent-1"
     }
 
-    post openings_path, params:
+    post openings_path, params: request_params
     first_location = response.headers.fetch("Location")
     first_opening = redirected_opening
 
     expect do
-      post openings_path, params:
+      post openings_path, params: request_params
     end.to change(Platform::DomainEvent, :count).by(0)
       .and change(Platform::OutboxMessage, :count).by(0)
 
