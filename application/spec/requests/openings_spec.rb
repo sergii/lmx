@@ -121,14 +121,19 @@ RSpec.describe "Openings inbox", type: :request do
       .and change(Platform::OutboxMessage.where(message_type: "job_opening.created"), :count).by(1)
 
     opening = redirected_opening
+    event = Platform::DomainEvent.where(event_type: "job_opening.created").order(:created_at).last
     expect(opening_count).to eq(before_count + 1)
     expect(opening.fetch(:job_posting_ids)).to be_empty
     expect(opening.fetch(:metadata)).to include(
       "ingress_interface" => "web/manual",
       "location_wording" => "Europe",
       "remote_policy_wording" => "Remote",
-      "compensation_original_text" => "€90k-€110k",
-      "manual_notes" => "Introduced by a recruiter"
+      "compensation_original_text" => "€90k-€110k"
+    )
+    expect(opening.fetch(:metadata)).not_to have_key("manual_notes")
+    expect(event.data).to include(
+      "notes" => "Introduced by a recruiter",
+      "workspace_id" => organization.typed_id
     )
   end
 
@@ -154,6 +159,7 @@ RSpec.describe "Openings inbox", type: :request do
       "ingress_interface" => "web/manual",
       "source_host" => "jobs.dou.ua"
     )
+    expect(posting.fetch(:metadata)).not_to have_key("submitted_by_workspace")
 
     expect do
       post openings_path, params: params.merge(idempotency_key: "manual-url-2")
