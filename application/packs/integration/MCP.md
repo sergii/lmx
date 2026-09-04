@@ -1,6 +1,6 @@
 # MCP runtime and adapters
 
-The MCP layer is intentionally thin. It exposes shared Integration read and command contracts without owning domain logic or persistence.
+The MCP layer is intentionally thin. It exposes shared Integration read and command contracts without owning recruiting-domain logic.
 
 ```text
 MCP client
@@ -49,7 +49,7 @@ For ordinary JSON-RPC requests the HTTP boundary requires and validates the stan
 - `Mcp-Name` for `tools/call`
 - `Content-Type: application/json`
 
-Header/body disagreement returns HTTP 400 with MCP `-32020` (`HeaderMismatch`). Unsupported protocol versions return HTTP 400 with `-32022`. JSON-RPC parse, invalid-request, and invalid-params protocol failures also map to HTTP 400; normal tool and method outcomes remain JSON-RPC responses.
+Header/body disagreement returns HTTP 400 with MCP `-32020` (`HeaderMismatch`). Unsupported protocol versions return HTTP 400 with `-32022`. JSON-RPC parse, invalid-request, and invalid-params failures also map to HTTP 400; normal tool and method outcomes remain JSON-RPC responses.
 
 The transport rejects request bodies larger than 4 MiB, rejects hosts not present in `LMX_MCP_HTTP_ALLOWED_HOSTS`, and rejects any browser `Origin` that is not explicitly present in `LMX_MCP_HTTP_ALLOWED_ORIGINS`. Non-browser clients that omit `Origin` are allowed after host and bearer authentication succeed. Wildcard host/origin configuration is intentionally refused.
 
@@ -94,13 +94,7 @@ If a browser-based MCP client is intentionally supported, configure exact origin
 export LMX_MCP_HTTP_ALLOWED_ORIGINS="https://client.example.com"
 ```
 
-Requests use:
-
-```http
-Authorization: Bearer <raw token>
-```
-
-When OAuth resource discovery is not configured, missing or invalid credentials receive HTTP 401 with `WWW-Authenticate: Bearer realm="lmx-mcp"`. The credential entry, not tool arguments or MCP `_meta`, supplies workspace, principal, credential reference, actor/executor provenance, trusted client label, and server-side capabilities.
+Requests use `Authorization: Bearer <raw token>`. When OAuth resource discovery is not configured, missing or invalid credentials receive HTTP 401 with `WWW-Authenticate: Bearer realm="lmx-mcp"`.
 
 Bootstrap credentials and OAuth introspection can coexist. The HTTP runtime tries an exact bootstrap digest match first and then the configured OAuth verifier. This keeps local/emergency credentials independent from externally issued access tokens without merging their trust models.
 
@@ -136,63 +130,91 @@ LMX remains an OAuth protected resource rather than becoming an authorization se
 
 ## External OAuth access-token verification
 
-The HTTP runtime can verify externally issued OAuth access tokens through an RFC 7662 token introspection endpoint. Introspection is deliberately used for this first verifier slice because it works for both opaque and structured access tokens and leaves signing-key and token-format policy with the authorization server instead of duplicating JWT cryptography in LMX.
+The HTTP runtime verifies externally issued OAuth access tokens through an RFC 7662 token introspection endpoint. Introspection works for both opaque and structured access tokens and leaves signing-key and token-format policy with the authorization server instead of duplicating JWT cryptography in LMX.
 
-The current verifier is issuer-bound by deployment configuration and requires one advertised authorization server. Configure the resource metadata above plus:
+Configure the resource metadata above plus:
 
 ```sh
 export LMX_MCP_OAUTH_INTROSPECTION_ENDPOINT="https://auth.example.com/oauth2/introspect"
 export LMX_MCP_OAUTH_INTROSPECTION_CLIENT_ID="lmx-resource-server"
 export LMX_MCP_OAUTH_INTROSPECTION_CLIENT_SECRET="..."
-export LMX_MCP_OAUTH_GRANTS='[{
-  "issuer": "https://auth.example.com",
-  "subject": "external-user-123",
-  "client_id": "chatgpt-client",
-  "workspace_id": "org_...",
-  "principal": "user:serhii",
-  "credential": "mcp-oauth:chatgpt",
-  "actor": "human:serhii",
-  "executor": "agent:chatgpt",
-  "client": "chatgpt",
-  "capabilities": [
-    "read:openings",
-    "read:candidates",
-    "read:matches",
-    "submit:openings",
-    "assess:matches"
-  ]
-}]'
 ```
 
-The introspection request uses HTTP Basic client authentication and sends only the bearer token plus `token_type_hint=access_token`. LMX does not follow redirects from the configured introspection endpoint. The endpoint must be HTTPS.
+The introspection request uses HTTP Basic client authentication and sends the bearer token plus `token_type_hint=access_token`. LMX does not follow redirects from the configured introspection endpoint. The endpoint must be HTTPS.
 
 An introspected token is accepted only when all of these conditions hold:
 
 - the authorization server reports `active: true`
 - `sub` and `client_id` are non-empty strings
-- `scope` is a non-empty RFC 7662 space-delimited scope string
+- `scope` is non-empty
 - `aud` contains the exact configured `LMX_MCP_OAUTH_RESOURCE`
 - `exp`, when present, is numeric and still in the future
-- `iss`, when present in the introspection response, exactly matches the configured authorization-server issuer
-- the exact `(issuer, subject, client_id)` tuple has a server-side `LMX_MCP_OAUTH_GRANTS` mapping
+- `iss`, when present, exactly matches the configured authorization-server issuer
+- the exact `(issuer, subject, client_id)` tuple resolves to an active local LMX grant
 
 The introspection endpoint itself is statically bound to the advertised issuer, so an introspection response may omit `iss`; if it supplies `iss`, disagreement fails closed.
 
-The local grant is the authority for Workspace identity and maximum Integration capabilities. Token scopes cannot grant permissions by themselves:
+A valid token without a matching active local grant receives HTTP 401. An authorization-server/introspection outage receives HTTP 503 with `mcp_oauth_unavailable` so transient verifier failure is not confused with invalid credentials. Partial OAuth verifier configuration fails closed as MCP HTTP configuration unavailable.
+
+The introspection client currently verifies on every OAuth-authenticated HTTP request and does not cache token status. If request volume makes that expensive, a later slice can add bounded caching no longer than token expiry while preserving revocation requirements.
+
+## Persisted OAuth grant registry
+
+Production OAuth identity mappings live in `integration_mcp_oauth_grants`. A grant maps one exact external identity tuple to trusted local execution identity and a maximum capability set:
+
+```text
+(issuer, subject, client_id)
+        |
+        v
+workspace + principal + credential + provenance + capabilities
+```
+
+`Integration::McpOauthGrantRegistry` is the application boundary for management. It supports:
+
+- `create_grant`
+- `update_capabilities`
+- `revoke_grant`
+- `restore_grant`
+- `list_grants`
+- `grant_history`
+
+Every mutation requires an explicit `managed_by` identity and writes an append-only `integration_mcp_oauth_grant_events` audit record. Revocation is checked on every OAuth-authenticated HTTP request, so a revoked persisted grant stops resolving immediately without waiting for process restart or configuration reload.
+
+The external identity tuple and `credential` reference are globally unique. This prevents one bearer token identity from becoming ambiguously mapped to several workspaces. Workspace IDs are backed by an `organizations` foreign key.
+
+The grant table is intentionally a pre-authentication registry rather than an organization-RLS table. The runtime does not know the workspace until it resolves `(issuer, subject, client_id)`, so requiring an existing workspace RLS context would make secure identity lookup circular. No bearer token or OAuth client secret is stored in this table. Management operations still enter through `Workspace::Api.with_workspace`, explicitly scope every read/mutation to that organization, and persist audit history.
+
+Effective authorization remains an intersection rather than a scope-to-permission conversion:
 
 ```text
 verified token scopes
         INTERSECTION
-server-side grant capabilities
+persisted LMX grant capabilities
         =
 effective RuntimeIdentity capabilities
 ```
 
-For example, a token carrying `submit:openings` does not receive that permission if its local grant only contains `read:openings`. Conversely, a local grant containing `submit:openings` does not make that capability effective when the token lacks the scope. Tool arguments and MCP `_meta` still cannot supply capabilities.
+A token carrying `submit:openings` therefore does not receive that permission if the persisted grant only contains `read:openings`. Conversely, a broad local grant does not bypass a narrow token.
 
-A valid token without a matching local grant receives HTTP 401. An authorization-server/introspection outage receives HTTP 503 with `mcp_oauth_unavailable` so transient verifier failure is not confused with invalid credentials. Partial OAuth verifier configuration fails closed as MCP HTTP configuration unavailable.
+For a migration window, `LMX_MCP_OAUTH_GRANTS` remains an optional legacy JSON fallback. The runtime always tries the persisted registry first and consults the legacy mapping only when no persisted active grant matches. New production configuration should create persisted grants instead of adding JSON mappings.
 
-The introspection client currently verifies on every OAuth-authenticated HTTP request and does not cache token status. If request volume makes that expensive, a later slice can add bounded caching no longer than the token expiry while preserving revocation requirements.
+Example from a trusted Rails console or future admin adapter:
+
+```ruby
+Integration::McpOauthGrantRegistry.create_grant(
+  workspace_id: "org_...",
+  issuer: "https://auth.example.com",
+  subject: "external-user-123",
+  client_id: "chatgpt-client",
+  principal: "user:serhii",
+  credential: "mcp-oauth:chatgpt",
+  actor: "human:serhii",
+  executor: "agent:chatgpt",
+  client: "chatgpt",
+  capabilities: %w[read:openings submit:openings],
+  managed_by: "user:workspace-admin"
+)
+```
 
 ## Read tools
 
@@ -255,9 +277,11 @@ Still intentionally absent:
 
 - local JWT/JWKS access-token verification as an alternative to RFC 7662 introspection
 - authorization-server login, consent, token issuance, refresh-token, or client-registration responsibilities
-- persisted agent credential issuance, rotation, revocation, and capability administration
+- persisted bootstrap bearer credential issuance/rotation and secret administration
+- a browser/admin UI or public HTTP API for OAuth grant administration
+- concrete Workspace/ActionPolicy-to-grant composition
 - browser CORS/preflight support for arbitrary web MCP clients
 - MCP resources/prompts/subscriptions/tasks
-- direct ActiveRecord access from MCP
+- direct recruiting-domain ActiveRecord access from MCP
 
 Those are later transport and composition slices and should not change the shared command/query semantics.
