@@ -73,8 +73,9 @@ module Integration
 
     def normalize_capabilities
       return unless capabilities.is_a?(Array)
+      return unless capabilities.all? { _1.is_a?(String) }
 
-      self.capabilities = capabilities.map { _1.to_s.strip }.reject(&:empty?).uniq.sort
+      self.capabilities = capabilities.map(&:strip).reject(&:empty?).uniq.sort
     end
 
     def issuer_is_https_identifier
