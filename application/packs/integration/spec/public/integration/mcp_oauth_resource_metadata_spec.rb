@@ -2,7 +2,7 @@
 
 require "rails_helper"
 
-RSpec.describe Integration::McpOAuthResourceMetadata do
+RSpec.describe Integration::McpOauthResourceMetadata do
   let(:environment) do
     {
       "LMX_MCP_OAUTH_RESOURCE" => "https://lmx.example.test/mcp",
