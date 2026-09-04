@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "digest"
 require "rails_helper"
 
 RSpec.describe "MCP HTTP endpoint", type: :request do
@@ -84,7 +85,7 @@ RSpec.describe "MCP HTTP endpoint", type: :request do
     }
 
     headers = mcp_headers(method: "server/discover", authorization: "")
-    post "/mcp", params: JSON.generate(body), headers:
+    post "/mcp", params: JSON.generate(body), headers: headers
 
     expect(response).to have_http_status(:unauthorized)
     expect(response.headers["WWW-Authenticate"]).to eq('Bearer realm="lmx-mcp"')
@@ -100,7 +101,7 @@ RSpec.describe "MCP HTTP endpoint", type: :request do
     }
     headers = mcp_headers(method: "tools/list").except("Mcp-Method")
 
-    post "/mcp", params: JSON.generate(body), headers:
+    post "/mcp", params: JSON.generate(body), headers: headers
 
     expect(response).to have_http_status(:bad_request)
     expect(response.parsed_body.dig("error", "code")).to eq(Integration::Mcp::Server::HEADER_MISMATCH)
@@ -136,7 +137,7 @@ RSpec.describe "MCP HTTP endpoint", type: :request do
     }
     headers = mcp_headers(method: "tools/list").merge("Origin" => "https://evil.example.test")
 
-    post "/mcp", params: JSON.generate(body), headers:
+    post "/mcp", params: JSON.generate(body), headers: headers
 
     expect(response).to have_http_status(:forbidden)
     expect(response.parsed_body).to eq("error" => "forbidden_origin")
