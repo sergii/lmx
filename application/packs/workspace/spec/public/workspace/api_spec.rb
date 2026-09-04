@@ -48,6 +48,67 @@ RSpec.describe Workspace::Api do
     end.to raise_error(described_class::NotFound, "membership not found in workspace")
   end
 
+  it "publishes immutable membership authorization facts by membership or user" do
+    user = User.create!(
+      name: "Authorization Snapshot User",
+      email: "authorization-snapshot@example.com",
+      password: "Password12345!",
+      verified: true
+    )
+    membership = Membership.create!(
+      user:,
+      organization: workspace,
+      role: "recruiter",
+      active: true
+    )
+
+    expected = {
+      id: membership.typed_id,
+      workspace_id: workspace.typed_id,
+      user_id: user.typed_id,
+      role: "recruiter",
+      active: true,
+      client_portal: false
+    }
+
+    by_membership = described_class.fetch_membership(
+      workspace_id: workspace.typed_id,
+      membership_id: membership.typed_id
+    )
+    by_user = described_class.fetch_membership_for_user(
+      workspace_id: workspace.typed_id,
+      user_id: user.typed_id
+    )
+
+    expect(by_membership).to eq(expected)
+    expect(by_user).to eq(expected)
+    expect(by_membership).to be_frozen
+  end
+
+  it "does not resolve a membership or user through another workspace" do
+    user = User.create!(
+      name: "Scoped Authorization User",
+      email: "scoped-authorization@example.com",
+      password: "Password12345!",
+      verified: true
+    )
+    membership = Membership.create!(user:, organization: workspace, role: "recruiter")
+
+    expect do
+      described_class.fetch_membership(
+        workspace_id: other_workspace.typed_id,
+        membership_id: membership.typed_id
+      )
+    end.to raise_error(described_class::NotFound, "membership not found in workspace")
+
+    expect do
+      described_class.fetch_membership_for_user(
+        workspace_id: other_workspace.typed_id,
+        user_id: user.typed_id
+      )
+    end.to raise_error(described_class::NotFound, "membership not found in workspace")
+  end
+
   it "does not expose Active Record lookup errors at the public boundary" do
     expect do
       described_class.with_workspace(workspace_id: "candidate_01invalid") { :unreachable }
@@ -72,6 +133,20 @@ RSpec.describe Workspace::Api do
     expect do
       described_class.with_workspace(workspace_id: workspace.typed_id, membership_id: "") { :unreachable }
     end.to raise_error(described_class::InvalidInput, "membership_id must be omitted or present")
+
+    expect do
+      described_class.fetch_membership(
+        workspace_id: workspace.typed_id,
+        membership_id: ""
+      )
+    end.to raise_error(described_class::InvalidInput, "membership_id is required")
+
+    expect do
+      described_class.fetch_membership_for_user(
+        workspace_id: workspace.typed_id,
+        user_id: ""
+      )
+    end.to raise_error(described_class::InvalidInput, "user_id is required")
   end
 
   def database_workspace_id

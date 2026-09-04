@@ -6,8 +6,79 @@ module Integration
     class InvalidInput < Error; end
     class NotFound < Error; end
     class Conflict < Error; end
+    class Unauthorized < Error; end
 
     module_function
+
+    def create_membership_grant(
+      workspace_id:,
+      membership_id:,
+      managed_by_membership_id:,
+      issuer:,
+      subject:,
+      client_id:,
+      credential:,
+      capabilities:,
+      executor: nil,
+      client: nil,
+      workspace_api: Workspace::Api,
+      grant_policy: Mcp::WorkspaceGrantPolicy.new
+    )
+      target = fetch_membership!(workspace_api, workspace_id:, membership_id:)
+      manager = fetch_membership!(
+        workspace_api,
+        workspace_id:,
+        membership_id: managed_by_membership_id
+      )
+      authorize_manager!(grant_policy, manager)
+
+      normalized = normalize_capabilities(capabilities)
+      authorize_capabilities!(grant_policy, target, normalized)
+
+      create_grant(
+        workspace_id:,
+        issuer:,
+        subject:,
+        client_id:,
+        principal: target.fetch(:user_id),
+        credential:,
+        capabilities: normalized,
+        managed_by: manager.fetch(:id),
+        actor: target.fetch(:user_id),
+        executor:,
+        client:
+      )
+    end
+
+    def update_membership_capabilities(
+      workspace_id:,
+      grant_id:,
+      capabilities:,
+      managed_by_membership_id:,
+      workspace_api: Workspace::Api,
+      grant_policy: Mcp::WorkspaceGrantPolicy.new
+    )
+      manager = fetch_membership!(
+        workspace_api,
+        workspace_id:,
+        membership_id: managed_by_membership_id
+      )
+      authorize_manager!(grant_policy, manager)
+
+      principal = with_workspace(workspace_id) do |organization|
+        find_grant!(organization, grant_id).principal
+      end
+      target = fetch_membership_for_user!(workspace_api, workspace_id:, user_id: principal)
+      normalized = normalize_capabilities(capabilities)
+      authorize_capabilities!(grant_policy, target, normalized)
+
+      update_capabilities(
+        workspace_id:,
+        grant_id:,
+        capabilities: normalized,
+        managed_by: manager.fetch(:id)
+      )
+    end
 
     def create_grant(
       workspace_id:,
@@ -166,6 +237,36 @@ module Integration
       raise NotFound, "OAuth grant not found in workspace"
     end
     private_class_method :find_grant!
+
+    def fetch_membership!(workspace_api, workspace_id:, membership_id:)
+      workspace_api.fetch_membership(workspace_id:, membership_id:)
+    rescue Workspace::Api::InvalidInput => error
+      raise InvalidInput, error.message
+    rescue Workspace::Api::NotFound => error
+      raise NotFound, error.message
+    end
+    private_class_method :fetch_membership!
+
+    def fetch_membership_for_user!(workspace_api, workspace_id:, user_id:)
+      workspace_api.fetch_membership_for_user(workspace_id:, user_id:)
+    rescue Workspace::Api::InvalidInput, Workspace::Api::NotFound
+      raise Unauthorized, "OAuth grant principal is not a workspace user identity"
+    end
+    private_class_method :fetch_membership_for_user!
+
+    def authorize_manager!(grant_policy, membership)
+      return if grant_policy.can_manage_grants?(membership)
+
+      raise Unauthorized, "workspace membership may not administer MCP OAuth grants"
+    end
+    private_class_method :authorize_manager!
+
+    def authorize_capabilities!(grant_policy, membership, capabilities)
+      return if grant_policy.allowed?(membership, capabilities)
+
+      raise Unauthorized, "requested capabilities exceed workspace membership authorization"
+    end
+    private_class_method :authorize_capabilities!
 
     def record_event!(grant, action:, managed_by:, reason: nil)
       McpOauthGrantEvent.create!(

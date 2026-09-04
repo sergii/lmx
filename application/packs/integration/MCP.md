@@ -170,52 +170,67 @@ Production OAuth identity mappings live in `integration_mcp_oauth_grants`. A gra
 workspace + principal + credential + provenance + capabilities
 ```
 
-`Integration::McpOauthGrantRegistry` is the application boundary for management. It supports:
+`Integration::McpOauthGrantRegistry` is the application boundary for management. It supports lower-level trusted operations and policy-bound workspace-user operations:
 
 - `create_grant`
 - `update_capabilities`
+- `create_membership_grant`
+- `update_membership_capabilities`
 - `revoke_grant`
 - `restore_grant`
 - `list_grants`
 - `grant_history`
 
-Every mutation requires an explicit `managed_by` identity and writes an append-only `integration_mcp_oauth_grant_events` audit record. Revocation is checked on every OAuth-authenticated HTTP request, so a revoked persisted grant stops resolving immediately without waiting for process restart or configuration reload.
+Every mutation records an append-only `integration_mcp_oauth_grant_events` audit snapshot. Revocation is checked on every OAuth-authenticated HTTP request, so a revoked persisted grant stops resolving immediately without process restart or environment reload.
 
 The external identity tuple and `credential` reference are globally unique. This prevents one bearer token identity from becoming ambiguously mapped to several workspaces. Workspace IDs are backed by an `organizations` foreign key.
 
-The grant table is intentionally a pre-authentication registry rather than an organization-RLS table. The runtime does not know the workspace until it resolves `(issuer, subject, client_id)`, so requiring an existing workspace RLS context would make secure identity lookup circular. No bearer token or OAuth client secret is stored in this table. Management operations still enter through `Workspace::Api.with_workspace`, explicitly scope every read/mutation to that organization, and persist audit history.
+The grant table is intentionally a pre-authentication registry rather than an organization-RLS table. The runtime does not know the workspace until it resolves `(issuer, subject, client_id)`, so requiring an existing workspace RLS context would make secure identity lookup circular. No bearer token or OAuth client secret is stored in this table. Management operations still resolve and scope an explicit workspace through `Workspace::Api`.
 
-Effective authorization remains an intersection rather than a scope-to-permission conversion:
+## Workspace-constrained OAuth grants
+
+For production user grants, use `create_membership_grant` instead of supplying arbitrary local identity strings. The target membership supplies the trusted user principal/actor, and the managing membership supplies the audit identity.
+
+Only an active `workspace_admin` may create or update policy-bound OAuth grants. Current broad MCP contracts are workspace-wide, so active `workspace_admin`, `recruiting_ops_lead`, and `recruiter` memberships can receive the current workspace-wide MCP capability set. Inactive memberships and client roles receive no broad MCP capabilities.
+
+Client roles are intentionally fail-closed here because their existing ActionPolicy rules are client-company and record scoped. Granting a workspace-wide MCP tool would discard those constraints. Client MCP access should use future client-scoped contracts instead.
+
+Example from a trusted Rails console or future admin adapter:
+
+```ruby
+Integration::McpOauthGrantRegistry.create_membership_grant(
+  workspace_id: "org_...",
+  membership_id: "membership_target...",
+  managed_by_membership_id: "membership_admin...",
+  issuer: "https://auth.example.com",
+  subject: "external-user-123",
+  client_id: "chatgpt-client",
+  credential: "mcp-oauth:chatgpt",
+  executor: "agent:chatgpt",
+  client: "chatgpt",
+  capabilities: %w[read:openings submit:openings]
+)
+```
+
+For a typed `user` principal, effective OAuth authorization is a three-way intersection on every authenticated request:
 
 ```text
 verified token scopes
         INTERSECTION
 persisted LMX grant capabilities
+        INTERSECTION
+current Workspace membership capabilities
         =
 effective RuntimeIdentity capabilities
 ```
 
-A token carrying `submit:openings` therefore does not receive that permission if the persisted grant only contains `read:openings`. Conversely, a broad local grant does not bypass a narrow token.
+That means an OAuth token cannot expand the stored grant, the stored grant cannot bypass a narrow token, and a stored user grant cannot outlive a Workspace membership deactivation or role reduction. `Integration::Mcp::PersistedOauthGrantStore` re-resolves the current membership for typed user principals before constructing `RuntimeIdentity`.
 
-For a migration window, `LMX_MCP_OAUTH_GRANTS` remains an optional legacy JSON fallback. The runtime always tries the persisted registry first and consults the legacy mapping only when no persisted active grant matches. New production configuration should create persisted grants instead of adding JSON mappings.
+The explicit `Integration::Mcp::WorkspaceGrantPolicy` allowlist is not generated automatically from the contract registry. Tests deliberately fail when published Integration capabilities and the policy list drift, forcing a review whenever a new capability is introduced.
 
-Example from a trusted Rails console or future admin adapter:
+The lower-level `create_grant` and `update_capabilities` methods remain available for trusted migration and service-principal composition. Typed user principals created through those lower-level operations are still constrained dynamically by current Workspace membership at runtime. Legacy non-TypeID principals preserve their migration behavior and do not pretend to be workspace-user memberships.
 
-```ruby
-Integration::McpOauthGrantRegistry.create_grant(
-  workspace_id: "org_...",
-  issuer: "https://auth.example.com",
-  subject: "external-user-123",
-  client_id: "chatgpt-client",
-  principal: "user:serhii",
-  credential: "mcp-oauth:chatgpt",
-  actor: "human:serhii",
-  executor: "agent:chatgpt",
-  client: "chatgpt",
-  capabilities: %w[read:openings submit:openings],
-  managed_by: "user:workspace-admin"
-)
-```
+For a migration window, `LMX_MCP_OAUTH_GRANTS` remains an optional legacy JSON fallback. The runtime always tries the persisted registry first and consults the legacy mapping only when no persisted active grant matches. New production user grants should use persisted membership-constrained grants instead of JSON mappings.
 
 ## Read tools
 
@@ -280,7 +295,7 @@ Still intentionally absent:
 - authorization-server login, consent, token issuance, refresh-token, or client-registration responsibilities
 - persisted bootstrap bearer credential issuance/rotation and secret administration
 - a browser/admin UI or public HTTP API for OAuth grant administration
-- concrete Workspace/ActionPolicy-to-grant composition
+- client-scoped MCP contracts that preserve client-company/record-level ActionPolicy constraints
 - browser CORS/preflight support for arbitrary web MCP clients
 - MCP resources/prompts/subscriptions/tasks
 - direct recruiting-domain ActiveRecord access from MCP
