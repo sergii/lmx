@@ -13,6 +13,8 @@ class McpController < ActionController::API
     self.response_body = body
   rescue Integration::McpHttpRuntime::Unauthenticated
     unauthorized
+  rescue Integration::McpHttpRuntime::AuthenticationUnavailable
+    render json: { error: "mcp_oauth_unavailable" }, status: :service_unavailable
   rescue Integration::McpHttpRuntime::ConfigurationError
     render json: { error: "mcp_http_unavailable" }, status: :service_unavailable
   end
