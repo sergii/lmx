@@ -57,7 +57,7 @@ Client-to-server notification POSTs are accepted without the modern standard-hea
 
 ## Bootstrap bearer authentication
 
-The first remote-auth slice uses pre-shared high-entropy bearer secrets. Raw bearer secrets are not stored in LMX configuration. `LMX_MCP_HTTP_CREDENTIALS` stores SHA-256 token digests plus trusted identity and capability metadata.
+The bootstrap remote-auth path uses pre-shared high-entropy bearer secrets. Raw bearer secrets are not stored in LMX configuration. `LMX_MCP_HTTP_CREDENTIALS` stores SHA-256 token digests plus trusted identity and capability metadata.
 
 Generate a token and digest, then retain the token only in the MCP client/secret store:
 
@@ -102,9 +102,11 @@ Authorization: Bearer <raw token>
 
 When OAuth resource discovery is not configured, missing or invalid credentials receive HTTP 401 with `WWW-Authenticate: Bearer realm="lmx-mcp"`. The credential entry, not tool arguments or MCP `_meta`, supplies workspace, principal, credential reference, actor/executor provenance, trusted client label, and server-side capabilities.
 
+Bootstrap credentials and OAuth introspection can coexist. The HTTP runtime tries an exact bootstrap digest match first and then the configured OAuth verifier. This keeps local/emergency credentials independent from externally issued access tokens without merging their trust models.
+
 ## OAuth protected resource discovery
 
-LMX can publish RFC 9728 OAuth 2.0 Protected Resource Metadata for the public MCP resource. Because the protected resource is the exact `https://.../mcp` URL, RFC 9728 inserts its well-known suffix before that resource path:
+LMX publishes RFC 9728 OAuth 2.0 Protected Resource Metadata for the public MCP resource. Because the protected resource is the exact `https://.../mcp` URL, RFC 9728 inserts its well-known suffix before that resource path:
 
 ```text
 https://lmx.example.com/mcp
@@ -130,9 +132,67 @@ When this metadata is configured, HTTP 401 responses advertise it using RFC 9728
 WWW-Authenticate: Bearer realm="lmx-mcp", resource_metadata="https://lmx.example.com/.well-known/oauth-protected-resource/mcp", scope="read:openings ..."
 ```
 
-This slice establishes standards-compliant resource discovery only. The current request authenticator still verifies the bootstrap pre-shared bearer credentials described above. Do not enable OAuth discovery in a production deployment until a verifier for access tokens issued by the advertised authorization server is composed into `McpHttpRuntime`; otherwise an OAuth-capable client can discover an issuer and obtain a token that LMX does not yet accept.
+LMX remains an OAuth protected resource rather than becoming an authorization server. The MCP `2026-07-28` specification deprecates Dynamic Client Registration in favor of Client ID Metadata Documents, so LMX does not build a DCR dependency into the resource server.
 
-LMX should remain a protected resource rather than becoming an authorization server by default. The next authorization slice should validate issuer-bound access tokens from an external OAuth/OIDC authorization server, map trusted subject/client/workspace claims into `RuntimeIdentity`, and intersect token scopes with Integration capabilities. The MCP `2026-07-28` specification deprecates Dynamic Client Registration in favor of Client ID Metadata Documents, so new LMX work should not build a DCR dependency into the resource server.
+## External OAuth access-token verification
+
+The HTTP runtime can verify externally issued OAuth access tokens through an RFC 7662 token introspection endpoint. Introspection is deliberately used for this first verifier slice because it works for both opaque and structured access tokens and leaves signing-key and token-format policy with the authorization server instead of duplicating JWT cryptography in LMX.
+
+The current verifier is issuer-bound by deployment configuration and requires one advertised authorization server. Configure the resource metadata above plus:
+
+```sh
+export LMX_MCP_OAUTH_INTROSPECTION_ENDPOINT="https://auth.example.com/oauth2/introspect"
+export LMX_MCP_OAUTH_INTROSPECTION_CLIENT_ID="lmx-resource-server"
+export LMX_MCP_OAUTH_INTROSPECTION_CLIENT_SECRET="..."
+export LMX_MCP_OAUTH_GRANTS='[{
+  "issuer": "https://auth.example.com",
+  "subject": "external-user-123",
+  "client_id": "chatgpt-client",
+  "workspace_id": "org_...",
+  "principal": "user:serhii",
+  "credential": "mcp-oauth:chatgpt",
+  "actor": "human:serhii",
+  "executor": "agent:chatgpt",
+  "client": "chatgpt",
+  "capabilities": [
+    "read:openings",
+    "read:candidates",
+    "read:matches",
+    "submit:openings",
+    "assess:matches"
+  ]
+}]'
+```
+
+The introspection request uses HTTP Basic client authentication and sends only the bearer token plus `token_type_hint=access_token`. LMX does not follow redirects from the configured introspection endpoint. The endpoint must be HTTPS.
+
+An introspected token is accepted only when all of these conditions hold:
+
+- the authorization server reports `active: true`
+- `sub` and `client_id` are non-empty strings
+- `scope` is a non-empty RFC 7662 space-delimited scope string
+- `aud` contains the exact configured `LMX_MCP_OAUTH_RESOURCE`
+- `exp`, when present, is numeric and still in the future
+- `iss`, when present in the introspection response, exactly matches the configured authorization-server issuer
+- the exact `(issuer, subject, client_id)` tuple has a server-side `LMX_MCP_OAUTH_GRANTS` mapping
+
+The introspection endpoint itself is statically bound to the advertised issuer, so an introspection response may omit `iss`; if it supplies `iss`, disagreement fails closed.
+
+The local grant is the authority for Workspace identity and maximum Integration capabilities. Token scopes cannot grant permissions by themselves:
+
+```text
+verified token scopes
+        INTERSECTION
+server-side grant capabilities
+        =
+effective RuntimeIdentity capabilities
+```
+
+For example, a token carrying `submit:openings` does not receive that permission if its local grant only contains `read:openings`. Conversely, a local grant containing `submit:openings` does not make that capability effective when the token lacks the scope. Tool arguments and MCP `_meta` still cannot supply capabilities.
+
+A valid token without a matching local grant receives HTTP 401. An authorization-server/introspection outage receives HTTP 503 with `mcp_oauth_unavailable` so transient verifier failure is not confused with invalid credentials. Partial OAuth verifier configuration fails closed as MCP HTTP configuration unavailable.
+
+The introspection client currently verifies on every OAuth-authenticated HTTP request and does not cache token status. If request volume makes that expensive, a later slice can add bounded caching no longer than the token expiry while preserving revocation requirements.
 
 ## Read tools
 
@@ -193,8 +253,8 @@ Neither stdio nor HTTP bypasses those adapters. The transport layer validates pr
 
 Still intentionally absent:
 
-- OAuth/OIDC access-token validation against the advertised authorization server
-- issuer/audience/resource validation and RFC 9207 authorization-response issuer checks on the client/authorization-server side
+- local JWT/JWKS access-token verification as an alternative to RFC 7662 introspection
+- authorization-server login, consent, token issuance, refresh-token, or client-registration responsibilities
 - persisted agent credential issuance, rotation, revocation, and capability administration
 - browser CORS/preflight support for arbitrary web MCP clients
 - MCP resources/prompts/subscriptions/tasks

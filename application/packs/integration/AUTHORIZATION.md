@@ -46,9 +46,9 @@ Both paths require the returned authorization evidence to match the exact `works
 The credential source is intentionally server-side. MCP, HTTP, CLI, and agent clients never provide their own capability arrays. Sources can be backed by:
 
 - the current trusted local stdio runtime identity
-- the current HTTP bootstrap bearer credential store
+- the HTTP bootstrap bearer credential store
+- the HTTP OAuth access-token introspection and local grant mapping
 - future Integration-owned agent credential persistence and explicit tool grants
-- future delegated OAuth access tokens whose trusted claims and scopes have been verified server-side
 - service credentials with workspace-specific grants
 - a composition layer that intersects credential or token scope with Workspace authorization facts
 
@@ -56,11 +56,27 @@ The authorization contract does not depend on which persistence or authenticatio
 
 ## Remote MCP authentication
 
-The HTTP MCP boundary currently authenticates pre-shared high-entropy bearer credentials configured server-side as SHA-256 digests. A successful lookup constructs `RuntimeIdentity`, and its credential source feeds the same capability authorization used by all other Integration ingress paths.
+The HTTP MCP boundary supports two independent bearer-authentication sources.
 
-LMX can also publish RFC 9728 Protected Resource Metadata and advertise it in `WWW-Authenticate` challenges. That discovery document describes the exact public `/mcp` resource, authorization-server issuers, supported bearer transport, and optional OAuth scopes. Resource discovery is not token validation: until the OAuth verifier slice lands, the HTTP runtime still accepts only the bootstrap credentials it can verify itself.
+Bootstrap credentials are pre-shared high-entropy secrets configured server-side as SHA-256 digests. A successful lookup constructs `RuntimeIdentity`, and its credential source feeds the same capability authorization used by all other Integration ingress paths.
 
-OAuth token scopes must never become a second independent authorization system. The future verifier should map trusted token identity into the existing context and intersect verified scopes with the capabilities recognized by Integration. Workspace authorization remains a separate server-side fact.
+For externally issued OAuth access tokens, LMX uses RFC 7662 token introspection against a statically configured HTTPS endpoint associated with the single advertised authorization-server issuer. Active token status is not enough by itself. LMX additionally requires a resource audience containing the exact MCP resource identifier, a subject, a client ID, a non-empty scope string, and a matching server-side `(issuer, subject, client_id)` grant. An `iss` value returned by introspection must agree with the configured issuer; omission is allowed because the introspection endpoint itself is issuer-bound.
+
+The local OAuth grant maps the external identity tuple to the trusted LMX `workspace_id`, `principal`, `credential`, actor/executor provenance, client label, and maximum Integration capabilities. Those values never come from arbitrary MCP arguments.
+
+OAuth scopes are not a second independent authorization system. Effective capabilities are the exact intersection of the verified token scope and the local server-side grant:
+
+```text
+verified OAuth token scopes
+          ∩
+server-side Integration capabilities
+          =
+RuntimeIdentity capabilities
+```
+
+A broad OAuth token therefore cannot expand an LMX grant, and a broad LMX grant cannot bypass a narrow token. Workspace authorization remains a separate server-side fact beyond this ingress authentication boundary.
+
+A token that is active at the external authorization server but has no local identity grant is treated as unauthenticated. An introspection outage is surfaced as service unavailable rather than as an invalid-credential decision, avoiding accidental fail-open or misleading 401 responses.
 
 ## Roles versus capabilities
 
@@ -78,8 +94,7 @@ Tool discovery is not the security boundary. A client may know that `openings.su
 
 ## Still intentionally deferred
 
-- OAuth/OIDC access-token verification against advertised authorization-server issuers
-- issuer/audience/resource and expiry validation for remote OAuth credentials
+- local JWT/JWKS verification as an alternative to online token introspection
 - persisted agent credential issuance, rotation, revocation, and secret verification
 - concrete Workspace/ActionPolicy-to-credential-grant composition
 - capability administration UI/API
