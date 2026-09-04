@@ -4,7 +4,8 @@ module Integration
   module Mcp
     module CommandTools
       DESCRIPTIONS = {
-        "matches.assess" => "Record a new versioned match assessment from authorized analysis output."
+        "matches.assess" => "Record a new versioned match assessment from authorized analysis output.",
+        "openings.submit" => "Submit a URL-backed or no-URL opening through the canonical Market Catalog command path."
       }.freeze
 
       module_function
