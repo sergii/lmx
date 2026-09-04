@@ -126,7 +126,7 @@ module MarketCatalog
     def persist_submission(provenance:)
       now = Time.current
       company = find_or_create_company
-      posting = url && record_posting(company:, observed_at: now)
+      posting = url && find_or_record_posting(company:, observed_at: now)
       existing_opening = posting&.job_opening
       opening = existing_opening || CreateOpening.call(
         canonical_title: title,
@@ -163,6 +163,14 @@ module MarketCatalog
       )
     end
 
+    def find_or_record_posting(company:, observed_at:)
+      digest = JobPosting.url_digest(url)
+      existing = JobPosting.find_by(source_key:, canonical_url_digest: digest)
+      return existing if existing
+
+      record_posting(company:, observed_at:)
+    end
+
     def record_posting(company:, observed_at:)
       RecordPosting.call(
         source_key: source_key,
@@ -172,8 +180,7 @@ module MarketCatalog
         publisher_company_id: company&.id,
         metadata: {
           "ingress_interface" => "web/manual",
-          "source_host" => source_host,
-          "submitted_by_workspace" => workspace_id
+          "source_host" => source_host
         }
       )
     end
@@ -193,7 +200,7 @@ module MarketCatalog
         resolver_key: RESOLVER_KEY,
         resolver_version: RESOLVER_VERSION,
         decided_at:,
-        metadata: { "workspace_id" => workspace_id }
+        metadata: { "ingress_interface" => "web/manual" }
       )
     end
 
@@ -204,8 +211,7 @@ module MarketCatalog
         "company_name" => company_name,
         "location_wording" => location,
         "remote_policy_wording" => remote_policy,
-        "compensation_original_text" => compensation,
-        "manual_notes" => notes
+        "compensation_original_text" => compensation
       }.compact
     end
 
@@ -231,6 +237,10 @@ module MarketCatalog
         "title" => opening.canonical_title,
         "company_name" => company_name,
         "submitted_url" => url,
+        "location" => location,
+        "remote_policy" => remote_policy,
+        "compensation" => compensation,
+        "notes" => notes,
         "ingress_interface" => "web/manual"
       }.compact
 
