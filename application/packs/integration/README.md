@@ -151,15 +151,16 @@ Authentication is represented by `principal` plus a credential reference in the 
 
 Production-shaped composition resolves capabilities from a server-side credential source and checks the contract's required capability before routing the query. Candidate identity and profile reads both require `read:candidates`; `matches.get.v1` requires `read:matches`. Client tool arguments never grant capabilities.
 
+The MCP composition now has both local stdio and authenticated stateless HTTP runtimes. Transport authentication resolves trusted workspace/principal/credential/capability evidence before the shared dispatcher is invoked; domain authorization remains inside the Integration boundary.
+
 ## Intentionally not implemented here
 
-- MCP server/runtime or MCP gem integration
-- HTTP routes/controllers
 - direct ActiveRecord queries across bounded contexts
 - exact historical CandidateProfileVersion transport lookup
 - ranked/top MatchAssessment query semantics
 - canonical Personal CRM implementation for `applications.get`
-- Transactional Inbox/Outbox write handling
-- write command metadata such as `command_id`, `idempotency_key`, and `causation_id`
+- MCP OAuth 2.1 / RFC 9728 discovery and token lifecycle
+- persisted agent credential issuance, rotation, revocation, and administration
+- MCP resources/prompts/subscriptions/tasks
 
 Those pieces can be plugged in later without changing the existing v1 tool/query names or the core query context/error semantics.
