@@ -9,6 +9,7 @@ import {
   LayoutGrid,
   ListTodo,
   PanelsTopLeft,
+  Plus,
   UserPlus,
   UserRound,
   UsersRound,
@@ -39,6 +40,11 @@ const mainNavItems: NavItem[] = [
     title: "Openings",
     href: "/openings",
     icon: Inbox,
+  },
+  {
+    title: "Add opening",
+    href: "/openings/new",
+    icon: Plus,
   },
   {
     title: "Applications",

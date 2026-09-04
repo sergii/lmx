@@ -4,6 +4,8 @@ module MarketCatalog
   module Api
     class Error < StandardError; end
     class NotFound < Error; end
+    class InvalidInput < Error; end
+    class ContractViolation < Error; end
 
     module_function
 
@@ -13,6 +15,23 @@ module MarketCatalog
 
     def create_opening(**attributes)
       opening_snapshot(CreateOpening.call(**attributes))
+    end
+
+    def submit_manual_opening(**attributes)
+      result = SubmitManualOpening.call(**attributes)
+      opening_id = result[:opening_id] || result["opening_id"]
+      posting_id = result[:posting_id] || result["posting_id"]
+      created = result.key?(:created) ? result[:created] : result["created"]
+
+      {
+        opening: fetch_opening(opening_id:),
+        posting: posting_id && fetch_posting(posting_id:),
+        created:
+      }.freeze
+    rescue SubmitManualOpening::InvalidInput => error
+      raise InvalidInput, error.message
+    rescue SubmitManualOpening::ContractViolation => error
+      raise ContractViolation, error.message
     end
 
     def search_openings(query: nil, filters: {}, cursor: nil, limit: nil)

@@ -11,6 +11,7 @@ job_posting.submit
 job_posting.update
 job_posting.link_to_opening
 job_posting.unlink_from_opening
+job_opening.submit_manual
 job_opening.merge
 job_opening.revert_merge
 personal_crm.save_opening
@@ -38,6 +39,7 @@ job_posting.reappeared
 job_posting.linked_to_opening
 job_posting.unlinked_from_opening
 job_opening.created
+job_opening.manual_submission_recorded
 job_opening.merged
 job_opening.merge_reverted
 job_opening.reopened
@@ -50,6 +52,8 @@ company.enriched
 ```
 
 Use past-tense facts for domain events. The distinction is intentional: `job_posting.update` is an instruction, while `job_posting.updated` is a fact. Personal CRM follows the same rule: `personal_crm.advance_application` is intent, while `personal_crm.application.stage_changed` is an accepted fact.
+
+A manual opening submission is ingress, not an acquisition source. The accepted command may create a new JobOpening or attach another manually supplied URL to an already known JobPosting/JobOpening identity. The Event Store records that accepted fact without inventing a new market source called "manual".
 
 A Personal CRM opportunity stream groups workflow facts for one Candidate + JobOpening pair. Individual application attempts inside that stream keep independent `application_attempt` identities, so repeat applications remain valid.
 

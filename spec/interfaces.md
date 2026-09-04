@@ -9,6 +9,7 @@ Candidate capabilities:
 ```text
 openings.search
 openings.get
+openings.submit
 postings.submit
 postings.get
 observations.submit
@@ -119,6 +120,12 @@ Supported/planned ingress classes:
 - import
 
 All write-capable ingress interfaces converge on Transactional Inbox + application command handling.
+
+Manual opening ingress accepts either a vacancy URL or no URL at all. A URL is evidence about a publication and can produce or reuse a JobPosting identity. A no-URL submission can still create a canonical JobOpening for private recruiter messages, referrals, conversations, or other opportunities without a public page.
+
+The word `manual` describes how evidence entered LMX, not where the vacancy was published. Manual submission must therefore remain provenance (`ingress_interface = web/manual`) rather than inventing a market source named `manual`. Known URL hosts can retain their real source key; unknown hosts may use a generic web source class while preserving the original host and URL.
+
+Submitting the same URL through a different command should reuse an existing JobPosting/JobOpening when stable identity matches. Replaying the same command identifier must not duplicate canonical state or events. A no-URL submission has no external identity signal, so a distinct command represents a distinct manually captured opportunity unless later identity resolution merges it.
 
 ## Versioned agent analysis
 
