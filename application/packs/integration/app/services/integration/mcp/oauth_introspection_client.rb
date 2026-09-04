@@ -2,6 +2,7 @@
 
 require "json"
 require "net/http"
+require "openssl"
 require "uri"
 
 module Integration
@@ -57,7 +58,7 @@ module Integration
         end
 
         return unless payload["active"] == true
-        return unless issuer_matches?(payload["iss"])
+        return unless issuer_matches?(payload)
 
         subject = claim_string(payload["sub"])
         token_client_id = claim_string(payload["client_id"])
@@ -68,6 +69,7 @@ module Integration
         return unless subject && token_client_id
         return if scopes.empty?
         return unless audiences.include?(resource)
+        return if payload.key?("exp") && expires_at.nil?
         return if expires_at && expires_at <= clock.call
 
         Claims.new(
@@ -105,9 +107,10 @@ module Integration
         [ response.code.to_i, response.body.to_s ]
       end
 
-      def issuer_matches?(value)
-        candidate = claim_string(value)
-        candidate.nil? || candidate == issuer
+      def issuer_matches?(payload)
+        return true unless payload.key?("iss")
+
+        claim_string(payload["iss"]) == issuer
       end
 
       def scope_list(value)
