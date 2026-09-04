@@ -53,7 +53,14 @@ RSpec.describe Integration::Mcp::PersistedOauthGrantStore do
   end
 
   it "does not resolve a different external subject" do
-    different_claims = claims.with(subject: "other-user")
+    different_claims = Integration::Mcp::OauthIntrospectionClient::Claims.new(
+      issuer: claims.issuer,
+      subject: "other-user",
+      client_id: claims.client_id,
+      scopes: claims.scopes,
+      audiences: claims.audiences,
+      expires_at: claims.expires_at
+    )
 
     expect(described_class.new.resolve(different_claims)).to be_nil
   end
