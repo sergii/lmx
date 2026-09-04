@@ -1,5 +1,6 @@
 import { Head, Link, router } from "@inertiajs/react"
 import { ArrowLeft, Link2, Plus, Send } from "lucide-react"
+import type { FormEvent, ReactNode } from "react"
 import { useState } from "react"
 
 import Heading from "@/components/heading"
@@ -36,7 +37,7 @@ export default function NewOpening() {
     setForm((current) => ({ ...current, [field]: value }))
   }
 
-  function submit(event: React.FormEvent<HTMLFormElement>) {
+  function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setSubmitting(true)
     setError(null)
@@ -102,7 +103,10 @@ export default function NewOpening() {
           </div>
         </div>
 
-        <form onSubmit={submit} className="bg-card space-y-5 rounded-xl border p-5">
+        <form
+          onSubmit={submit}
+          className="bg-card space-y-5 rounded-xl border p-5"
+        >
           <Field label="Role title" required>
             <Input
               value={form.title}
@@ -178,7 +182,10 @@ export default function NewOpening() {
               accepted opening remains canonical Market Catalog state and the
               submission is recorded through the durable command/event boundary.
             </p>
-            <Button type="submit" disabled={submitting || form.title.trim() === ""}>
+            <Button
+              type="submit"
+              disabled={submitting || form.title.trim() === ""}
+            >
               <Send className="size-4" />
               {submitting ? "Adding…" : "Add opening"}
             </Button>
@@ -198,7 +205,7 @@ function Field({
   label: string
   hint?: string
   required?: boolean
-  children: React.ReactNode
+  children: ReactNode
 }) {
   return (
     <label className="block space-y-2">
@@ -206,7 +213,9 @@ function Field({
         {label}
         {required && <span className="text-destructive">*</span>}
         {hint && (
-          <span className="text-muted-foreground text-xs font-normal">{hint}</span>
+          <span className="text-muted-foreground text-xs font-normal">
+            {hint}
+          </span>
         )}
       </span>
       {children}
