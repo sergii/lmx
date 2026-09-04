@@ -161,4 +161,27 @@ RSpec.describe "Integration read public API adapters", type: :model do
       adapter.call(read_query("openings.get", { id: "opening_opaque" }))
     end.to raise_error(Integration::Read::Error::Unsupported)
   end
+
+  it "maps configured owning-package validation failures to Integration invalid_input" do
+    invalid = Class.new(StandardError)
+    application_api = Class.new do
+      define_method(:fetch_application) do |workspace_id:, application_id:|
+        raise invalid, "#{workspace_id}:#{application_id}"
+      end
+    end.new
+    adapter = Integration::Read::Adapters::ApplicationsGet.new(
+      application_api:,
+      workspace_scope: workspace_scope_class.new,
+      invalid_input_errors: [ invalid ]
+    )
+
+    expect do
+      adapter.call(read_query("applications.get", { id: "not-an-application-typeid" }))
+    end.to raise_error(Integration::Read::Error::InvalidInput) { |error|
+      expect(error.details).to eq(
+        contract: "applications.get.v1",
+        id: "not-an-application-typeid"
+      )
+    }
+  end
 end
