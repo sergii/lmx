@@ -46,6 +46,16 @@ Reconciliation cascades to the linked `JobOpening`. An opening stays `open` whil
 
 Posting-to-opening link, relink, and unlink operations also recompute the affected opening projections. The reconciliation services are deterministic projections over retained evidence, so they can safely be rerun after replay, repair, or parser improvements.
 
+## Opening submission
+
+`MarketCatalog::SubmitOpening` is the canonical mutation service for accepted opening submissions. It supports both URL-backed vacancies and no-URL opportunities, preserves the actual ingress interface, reuses stable canonical URL identity, and appends the resulting domain event/outbox message in the caller's transaction.
+
+`MarketCatalog::Api.submit_opening` is intended for an already-established command boundary such as Integration MCP/API dispatch. The caller supplies trusted command provenance and owns Transactional Inbox idempotency.
+
+`MarketCatalog::Api.submit_manual_opening` remains the browser/manual entry point. It owns its existing command receipt/idempotency wrapper and delegates canonical mutation to the same generic service with the fine-grained ingress label `web/manual`.
+
+This distinction prevents MCP or future HTTP/API submissions from being mislabeled as manual web input while keeping one canonical identity-resolution path.
+
 ## Legacy donor boundary
 
 The root donor classes `Job`, `JobPosting`, `ClientCompany`, and `Project` implement the old staffing workflow. They are not the canonical LMX market model. During adoption they remain available to legacy screens while new LMX code uses the namespaced Market Catalog models and `market_catalog_*` tables.
@@ -58,6 +68,8 @@ Initial mutation capabilities are:
 
 - `create_company`
 - `create_opening`
+- `submit_opening`
+- `submit_manual_opening`
 - `record_posting`
 - `record_posting_snapshot`
 - `reconcile_posting_lifecycle`

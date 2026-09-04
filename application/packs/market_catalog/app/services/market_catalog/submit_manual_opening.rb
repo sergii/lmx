@@ -8,27 +8,7 @@ module MarketCatalog
     class ContractViolation < StandardError; end
 
     COMMAND_NAME = "job_opening.submit_manual"
-    CREATED_EVENT = "job_opening.created"
-    SUBMITTED_EVENT = "job_opening.manual_submission_recorded"
-    AGGREGATE_TYPE = "JobOpening"
-    RESOLVER_KEY = "manual_submission"
-    RESOLVER_VERSION = "1"
-
-    SOURCE_HOSTS = {
-      "dou.ua" => "dou",
-      "jobs.dou.ua" => "dou",
-      "djinni.co" => "djinni",
-      "work.ua" => "work_ua",
-      "www.work.ua" => "work_ua",
-      "robota.ua" => "robota_ua",
-      "www.robota.ua" => "robota_ua",
-      "remoteok.com" => "remoteok",
-      "www.remoteok.com" => "remoteok",
-      "linkedin.com" => "linkedin",
-      "www.linkedin.com" => "linkedin",
-      "indeed.com" => "indeed",
-      "www.indeed.com" => "indeed"
-    }.freeze
+    INGRESS_INTERFACE = "web/manual"
 
     class << self
       def call(
@@ -110,110 +90,32 @@ module MarketCatalog
       )
 
       command_executor.call(command_id: provenance.fetch(:command_id)) do
-        persist_submission(provenance:)
+        SubmitOpening.call(
+          workspace_id:,
+          title:,
+          company_name:,
+          url:,
+          location:,
+          remote_policy:,
+          compensation:,
+          notes:,
+          command: provenance.except(:message_id),
+          ingress_interface: INGRESS_INTERFACE,
+          reliability_api:
+        )
       end.fetch(:result)
     rescue Platform::Reliability::Api::Error => error
       raise ContractViolation, "reliability boundary rejected manual opening submission: #{error.message}"
-    rescue ActiveRecord::RecordInvalid, RecordPosting::IdentityConflict => error
+    rescue SubmitOpening::InvalidInput => error
       raise InvalidInput, error.message
+    rescue SubmitOpening::ContractViolation => error
+      raise ContractViolation, error.message
     end
 
     private
 
     attr_reader :workspace_id, :title, :company_name, :url, :location, :remote_policy,
       :compensation, :notes, :command, :reliability_api, :command_executor
-
-    def persist_submission(provenance:)
-      now = Time.current
-      company = find_or_create_company
-      posting = url && find_or_record_posting(company:, observed_at: now)
-      existing_opening = posting&.job_opening
-      opening = existing_opening || CreateOpening.call(
-        canonical_title: title,
-        first_seen_at: now,
-        primary_company_id: company&.id,
-        metadata: opening_metadata
-      )
-
-      link_posting(posting:, opening:, decided_at: now) if posting && posting.job_opening_id.nil?
-      append_event(
-        opening:,
-        posting:,
-        event_type: existing_opening ? SUBMITTED_EVENT : CREATED_EVENT,
-        occurred_at: now,
-        provenance:
-      )
-
-      {
-        opening_id: opening.typed_id,
-        posting_id: posting&.typed_id,
-        created: existing_opening.nil?
-      }.compact.freeze
-    end
-
-    def find_or_create_company
-      return if company_name.blank?
-
-      normalized = company_name.downcase.gsub(/\s+/, " ")
-      Company.find_by(normalized_name: normalized) || CreateCompany.call(
-        canonical_name: company_name,
-        metadata: {
-          "first_ingress_interface" => "web/manual"
-        }
-      )
-    end
-
-    def find_or_record_posting(company:, observed_at:)
-      digest = JobPosting.url_digest(url)
-      existing = JobPosting.find_by(source_key:, canonical_url_digest: digest)
-      return existing if existing
-
-      record_posting(company:, observed_at:)
-    end
-
-    def record_posting(company:, observed_at:)
-      RecordPosting.call(
-        source_key: source_key,
-        title:,
-        observed_at:,
-        canonical_url: url,
-        publisher_company_id: company&.id,
-        metadata: {
-          "ingress_interface" => "web/manual",
-          "source_host" => source_host
-        }
-      )
-    end
-
-    def link_posting(posting:, opening:, decided_at:)
-      ResolvePostingOpeningLink.call(
-        posting_id: posting.typed_id,
-        opening_id: opening.typed_id,
-        confidence: 1.0,
-        evidence: [
-          {
-            "type" => "manual_submission",
-            "url" => url,
-            "ingress_interface" => "web/manual"
-          }
-        ],
-        resolver_key: RESOLVER_KEY,
-        resolver_version: RESOLVER_VERSION,
-        decided_at:,
-        metadata: { "ingress_interface" => "web/manual" }
-      )
-    end
-
-    def opening_metadata
-      {
-        "ingress_interface" => "web/manual",
-        "submitted_url" => url,
-        "company_name" => company_name,
-        "location_wording" => location,
-        "remote_policy_wording" => remote_policy,
-        "compensation_original_text" => compensation
-      }.compact
-    end
 
     def submission_payload
       {
@@ -226,55 +128,6 @@ module MarketCatalog
         compensation:,
         notes:
       }.compact
-    end
-
-    def append_event(opening:, posting:, event_type:, occurred_at:, provenance:)
-      aggregate_id = opening.typed_id
-      data = {
-        "workspace_id" => workspace_id,
-        "job_opening_id" => aggregate_id,
-        "job_posting_id" => posting&.typed_id,
-        "title" => opening.canonical_title,
-        "company_name" => company_name,
-        "submitted_url" => url,
-        "location" => location,
-        "remote_policy" => remote_policy,
-        "compensation" => compensation,
-        "notes" => notes,
-        "ingress_interface" => "web/manual"
-      }.compact
-
-      reliability_api.append_domain_event(
-        event_type:,
-        event_version: 1,
-        aggregate_type: AGGREGATE_TYPE,
-        aggregate_id:,
-        expected_aggregate_version: Platform::Reliability::AggregateVersion.call(
-          aggregate_type: AGGREGATE_TYPE,
-          aggregate_id:
-        ),
-        occurred_at:,
-        effective_at: occurred_at,
-        principal: provenance.fetch(:principal),
-        credential: provenance.fetch(:credential),
-        actor: provenance.fetch(:actor),
-        executor: provenance.fetch(:executor),
-        interface: provenance.fetch(:interface),
-        client: provenance.fetch(:client),
-        correlation_id: provenance[:correlation_id],
-        causation_id: provenance[:causation_id],
-        command_id: provenance.fetch(:command_id),
-        idempotency_key: provenance.fetch(:idempotency_key),
-        data:,
-        outbox_messages: [
-          {
-            message_type: event_type,
-            message_version: 1,
-            payload: data,
-            available_at: occurred_at
-          }
-        ]
-      )
     end
 
     def normalized_command
@@ -331,14 +184,6 @@ module MarketCatalog
       uri.to_s
     rescue URI::InvalidURIError
       raise InvalidInput, "url must be a valid http or https URL"
-    end
-
-    def source_host
-      URI.parse(url).host.to_s.downcase
-    end
-
-    def source_key
-      SOURCE_HOSTS.fetch(source_host, "web")
     end
 
     def optional_string(value)

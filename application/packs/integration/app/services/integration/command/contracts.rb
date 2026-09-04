@@ -8,7 +8,12 @@ module Integration
         version: 1,
         required_capability: "assess:matches"
       )
-      ALL = [ MATCHES_ASSESS ].freeze
+      OPENINGS_SUBMIT = OpeningsSubmitContract.new(
+        name: "openings.submit",
+        version: 1,
+        required_capability: "submit:openings"
+      )
+      ALL = [ MATCHES_ASSESS, OPENINGS_SUBMIT ].freeze
 
       module_function
 

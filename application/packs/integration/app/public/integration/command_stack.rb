@@ -7,6 +7,7 @@ module Integration
     def build(
       credential_source:,
       workspace_api: Workspace::Api,
+      market_api: MarketCatalog::Api,
       match_api: Intelligence::Api,
       reliability_api: Platform::Reliability::Api,
       command_executor: Platform::Reliability::CommandExecutor
@@ -23,6 +24,11 @@ module Integration
             invalid_input_errors: [ Intelligence::Api::InvalidInput ],
             not_found_errors: [ Intelligence::Api::NotFound ],
             contract_violation_errors: [ Intelligence::Api::ContractViolation ]
+          ),
+          "openings.submit.v1" => Command::Adapters::OpeningsSubmit.new(
+            market_api:,
+            invalid_input_errors: [ MarketCatalog::Api::InvalidInput ],
+            contract_violation_errors: [ MarketCatalog::Api::ContractViolation ]
           )
         }
       )
