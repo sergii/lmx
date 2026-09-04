@@ -45,7 +45,8 @@ module Integration
           "applications.get.v1" => Read::Adapters::ApplicationsGet.new(
             application_api:,
             workspace_scope:,
-            not_found_errors: [ PersonalCrm::Api::NotFound ]
+            not_found_errors: [ PersonalCrm::Api::NotFound ],
+            invalid_input_errors: [ PersonalCrm::Api::InvalidInput ]
           )
         }
       )
