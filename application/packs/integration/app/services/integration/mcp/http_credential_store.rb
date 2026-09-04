@@ -37,8 +37,7 @@ module Integration
       end
 
       def authenticate(token)
-        token = token.to_s
-        return if token.empty?
+        return unless token.is_a?(String) && !token.empty?
 
         digest = Digest::SHA256.hexdigest(token)
         matched = nil
@@ -67,7 +66,11 @@ module Integration
       attr_reader :entries
 
       def parse(serialized)
-        raw = JSON.parse(serialized.to_s)
+        unless serialized.is_a?(String)
+          raise ConfigurationError, "MCP HTTP credentials must be a JSON string"
+        end
+
+        raw = JSON.parse(serialized)
         unless raw.is_a?(Array)
           raise ConfigurationError, "MCP HTTP credentials must be a JSON array"
         end
@@ -94,9 +97,9 @@ module Integration
           workspace_id: required_string(attributes, "workspace_id", index:),
           principal:,
           credential: required_string(attributes, "credential", index:),
-          actor: optional_string(attributes, "actor") || principal,
-          executor: optional_string(attributes, "executor") || "mcp:http",
-          client: optional_string(attributes, "client") || "mcp-http",
+          actor: optional_string(attributes, "actor", index:) || principal,
+          executor: optional_string(attributes, "executor", index:) || "mcp:http",
+          client: optional_string(attributes, "client", index:) || "mcp-http",
           capabilities: capabilities(attributes, index:)
         ).freeze
       end
@@ -108,27 +111,33 @@ module Integration
         end
 
         normalized = values.map do |value|
-          string = value.to_s.strip
-          if string.empty?
+          unless value.is_a?(String) && !value.strip.empty?
             raise ConfigurationError, "MCP HTTP credential entry #{index} capabilities must contain non-empty strings"
           end
 
-          string
+          value.strip
         end
 
         normalized.uniq.sort.freeze
       end
 
       def required_string(attributes, key, index:)
-        value = optional_string(attributes, key)
+        value = optional_string(attributes, key, index:)
         return value if value
 
         raise ConfigurationError, "MCP HTTP credential entry #{index} #{key} must be present"
       end
 
-      def optional_string(attributes, key)
-        value = attributes[key].to_s.strip
-        value unless value.empty?
+      def optional_string(attributes, key, index:)
+        value = attributes[key]
+        return if value.nil?
+
+        unless value.is_a?(String)
+          raise ConfigurationError, "MCP HTTP credential entry #{index} #{key} must be a string"
+        end
+
+        stripped = value.strip
+        stripped unless stripped.empty?
       end
 
       def duplicate(values)
