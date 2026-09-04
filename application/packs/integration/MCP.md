@@ -69,7 +69,7 @@ Current write tools:
 
 The opening submission command uses `MarketCatalog::Api.submit_opening`. Canonical URL identity is reused across distinct submissions, while command retries are handled by the Integration Transactional Inbox. MCP-originated records retain `ingress_interface = mcp`; they are not mislabeled as browser/manual submissions.
 
-For write tools the runtime derives a stable command/message/idempotency identity from the trusted runtime identity, JSON-RPC request ID, and tool name. Replaying the same MCP request therefore reaches the existing Inbox replay semantics, while a distinct request remains a distinct command.
+Write calls may supply `com.lmx/idempotencyKey` inside MCP `_meta`. That key is combined with the trusted workspace/principal/credential/client identity and tool name to derive the durable Inbox command identity, so a retry remains the same command even when the JSON-RPC request ID or stdio process changes. When the client does not supply that key, LMX falls back to the JSON-RPC request ID scoped to the current runtime process. The fallback is replay-safe within one stdio session without creating accidental collisions when another client process later reuses the same JSON-RPC IDs.
 
 ## Trusted local runtime identity
 
