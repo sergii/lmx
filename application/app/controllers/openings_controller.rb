@@ -31,9 +31,7 @@ class OpeningsController < InertiaController
     )
 
     redirect_to opening_path(result.dig(:opening, :id)), status: :see_other
-  rescue MarketCatalog::Api::InvalidInput, MarketCatalog::Api::ContractViolation, ActionController::ParameterMissing => error
-    raise error if Rails.env.test?
-
+  rescue MarketCatalog::Api::InvalidInput, MarketCatalog::Api::ContractViolation, ActionController::ParameterMissing
     head :unprocessable_content
   end
 
