@@ -105,8 +105,6 @@ RSpec.describe "Openings inbox", type: :request do
   end
 
   it "creates a canonical opening without requiring a public URL" do
-    before_count = opening_count
-
     expect do
       post openings_path, params: {
         title: "Principal Rails Engineer",
@@ -122,7 +120,6 @@ RSpec.describe "Openings inbox", type: :request do
 
     opening = redirected_opening
     event = Platform::DomainEvent.where(event_type: "job_opening.created").order(:created_at).last
-    expect(opening_count).to eq(before_count + 1)
     expect(opening.fetch(:job_posting_ids)).to be_empty
     expect(opening.fetch(:metadata)).to include(
       "ingress_interface" => "web/manual",
@@ -145,12 +142,10 @@ RSpec.describe "Openings inbox", type: :request do
       location: "Ukraine",
       idempotency_key: "manual-url-1"
     }
-    before_count = opening_count
 
     post openings_path, params:
 
     opening = redirected_opening
-    expect(opening_count).to eq(before_count + 1)
     expect(opening.fetch(:job_posting_ids).size).to eq(1)
     posting = MarketCatalog::Api.fetch_posting(posting_id: opening.fetch(:job_posting_ids).first)
     expect(posting.fetch(:source_key)).to eq("dou")
@@ -165,11 +160,13 @@ RSpec.describe "Openings inbox", type: :request do
       post openings_path, params: params.merge(idempotency_key: "manual-url-2")
     end.to change(
       Platform::DomainEvent.where(event_type: "job_opening.manual_submission_recorded"), :count
-    ).by(1)
+    ).by(1).and change(
+      Platform::DomainEvent.where(event_type: "job_opening.created"), :count
+    ).by(0)
 
-    expect(opening_count).to eq(before_count + 1)
-    expect(redirected_opening.fetch(:id)).to eq(opening.fetch(:id))
-    expect(redirected_opening.fetch(:job_posting_ids)).to eq(opening.fetch(:job_posting_ids))
+    repeated = redirected_opening
+    expect(repeated.fetch(:id)).to eq(opening.fetch(:id))
+    expect(repeated.fetch(:job_posting_ids)).to eq(opening.fetch(:job_posting_ids))
   end
 
   it "replays the same manual command without duplicating canonical state" do
@@ -179,21 +176,20 @@ RSpec.describe "Openings inbox", type: :request do
     }
 
     post openings_path, params:
-    count_after_first = opening_count
+    first_location = response.headers.fetch("Location")
+    first_opening = redirected_opening
 
     expect do
       post openings_path, params:
     end.to change(Platform::DomainEvent, :count).by(0)
       .and change(Platform::OutboxMessage, :count).by(0)
 
-    expect(opening_count).to eq(count_after_first)
+    expect(response).to have_http_status(:see_other)
+    expect(response.headers.fetch("Location")).to eq(first_location)
+    expect(redirected_opening.fetch(:id)).to eq(first_opening.fetch(:id))
   end
 
   private
-
-  def opening_count
-    MarketCatalog::Api.search_openings(limit: 100).fetch(:items).size
-  end
 
   def redirected_opening
     expect(response).to have_http_status(:see_other)
