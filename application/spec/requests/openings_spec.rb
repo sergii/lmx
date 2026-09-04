@@ -105,6 +105,8 @@ RSpec.describe "Openings inbox", type: :request do
   end
 
   it "creates a canonical opening without requiring a public URL" do
+    before_count = opening_count
+
     expect do
       post openings_path, params: {
         title: "Principal Rails Engineer",
@@ -115,14 +117,13 @@ RSpec.describe "Openings inbox", type: :request do
         notes: "Introduced by a recruiter",
         idempotency_key: "manual-no-url-1"
       }
-    end.to change(MarketCatalog::JobOpening, :count).by(1)
-      .and change(Platform::DomainEvent.where(event_type: "job_opening.created"), :count).by(1)
+    end.to change(Platform::DomainEvent.where(event_type: "job_opening.created"), :count).by(1)
       .and change(Platform::OutboxMessage.where(message_type: "job_opening.created"), :count).by(1)
 
-    opening = MarketCatalog::JobOpening.order(:created_at).last
-    expect(response).to redirect_to(opening_path(opening.typed_id))
-    expect(opening.job_postings).to be_empty
-    expect(opening.metadata).to include(
+    opening = redirected_opening
+    expect(opening_count).to eq(before_count + 1)
+    expect(opening.fetch(:job_posting_ids)).to be_empty
+    expect(opening.fetch(:metadata)).to include(
       "ingress_interface" => "web/manual",
       "location_wording" => "Europe",
       "remote_policy_wording" => "Remote",
@@ -139,30 +140,30 @@ RSpec.describe "Openings inbox", type: :request do
       location: "Ukraine",
       idempotency_key: "manual-url-1"
     }
+    before_count = opening_count
 
-    expect do
-      post openings_path, params:
-    end.to change(MarketCatalog::JobOpening, :count).by(1)
-      .and change(MarketCatalog::JobPosting, :count).by(1)
+    post openings_path, params:
 
-    opening = MarketCatalog::JobOpening.order(:created_at).last
-    posting = opening.job_postings.first
-    expect(posting.source_key).to eq("dou")
-    expect(posting.canonical_url).to eq("https://jobs.dou.ua/companies/example/vacancies/123/")
-    expect(posting.metadata).to include(
+    opening = redirected_opening
+    expect(opening_count).to eq(before_count + 1)
+    expect(opening.fetch(:job_posting_ids).size).to eq(1)
+    posting = MarketCatalog::Api.fetch_posting(posting_id: opening.fetch(:job_posting_ids).first)
+    expect(posting.fetch(:source_key)).to eq("dou")
+    expect(posting.fetch(:canonical_url)).to eq("https://jobs.dou.ua/companies/example/vacancies/123/")
+    expect(posting.fetch(:metadata)).to include(
       "ingress_interface" => "web/manual",
       "source_host" => "jobs.dou.ua"
     )
 
     expect do
       post openings_path, params: params.merge(idempotency_key: "manual-url-2")
-    end.to change(MarketCatalog::JobOpening, :count).by(0)
-      .and change(MarketCatalog::JobPosting, :count).by(0)
-      .and change(
-        Platform::DomainEvent.where(event_type: "job_opening.manual_submission_recorded"), :count
-      ).by(1)
+    end.to change(
+      Platform::DomainEvent.where(event_type: "job_opening.manual_submission_recorded"), :count
+    ).by(1)
 
-    expect(response).to redirect_to(opening_path(opening.typed_id))
+    expect(opening_count).to eq(before_count + 1)
+    expect(redirected_opening.fetch(:id)).to eq(opening.fetch(:id))
+    expect(redirected_opening.fetch(:job_posting_ids)).to eq(opening.fetch(:job_posting_ids))
   end
 
   it "replays the same manual command without duplicating canonical state" do
@@ -172,11 +173,25 @@ RSpec.describe "Openings inbox", type: :request do
     }
 
     post openings_path, params:
+    count_after_first = opening_count
 
     expect do
       post openings_path, params:
-    end.to change(MarketCatalog::JobOpening, :count).by(0)
-      .and change(Platform::DomainEvent, :count).by(0)
+    end.to change(Platform::DomainEvent, :count).by(0)
       .and change(Platform::OutboxMessage, :count).by(0)
+
+    expect(opening_count).to eq(count_after_first)
+  end
+
+  private
+
+  def opening_count
+    MarketCatalog::Api.search_openings(limit: 100).fetch(:items).size
+  end
+
+  def redirected_opening
+    expect(response).to have_http_status(:see_other)
+    opening_id = response.headers.fetch("Location").split("/").last
+    MarketCatalog::Api.fetch_opening(opening_id:)
   end
 end
