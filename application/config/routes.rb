@@ -21,7 +21,7 @@ Rails.application.routes.draw do
   resource :organization_selection, only: :create
   resources :client_companies, only: %i[index create]
   resources :projects, only: %i[index create]
-  resources :openings, only: %i[index show] do
+  resources :openings, only: %i[index new create show] do
     post :actions, to: "opening_actions#create", on: :member
   end
   resource :profile, only: %i[show update], controller: "candidate_profile"
