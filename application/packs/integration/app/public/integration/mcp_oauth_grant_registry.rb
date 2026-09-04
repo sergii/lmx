@@ -49,6 +49,10 @@ module Integration
     rescue ActiveRecord::RecordNotUnique
       raise Conflict, "OAuth grant external identity or credential already exists"
     rescue ActiveRecord::RecordInvalid => error
+      if uniqueness_conflict?(error.record)
+        raise Conflict, "OAuth grant external identity or credential already exists"
+      end
+
       raise InvalidInput, error.record.errors.full_messages.join(", ")
     end
 
@@ -174,6 +178,11 @@ module Integration
       )
     end
     private_class_method :record_event!
+
+    def uniqueness_conflict?(record)
+      record.errors.of_kind?(:subject, :taken) || record.errors.of_kind?(:credential, :taken)
+    end
+    private_class_method :uniqueness_conflict?
 
     def normalize_capabilities(values)
       unless values.is_a?(Array)
