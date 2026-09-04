@@ -28,7 +28,10 @@ module Integration
           ensure_contract!(query)
 
           data = @workspace_scope.call(query.context) do
-            @application_api.fetch_application(application_id: query.input.fetch(:id))
+            @application_api.fetch_application(
+              workspace_id: query.context.workspace_id,
+              application_id: query.input.fetch(:id)
+            )
           end
 
           Ports::Result.new(data:, provenance: PROVENANCE)
