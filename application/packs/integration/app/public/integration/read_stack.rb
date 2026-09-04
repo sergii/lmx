@@ -9,7 +9,8 @@ module Integration
       workspace_api: Workspace::Api,
       candidate_api: TalentProfile::Api,
       opening_api: MarketCatalog::Api,
-      match_api: Intelligence::Api
+      match_api: Intelligence::Api,
+      application_api: PersonalCrm::Api
     )
       workspace_scope = Read::Adapters::PublicApiWorkspaceScope.new(
         workspace_api:,
@@ -40,6 +41,11 @@ module Integration
             match_api:,
             workspace_scope:,
             not_found_errors: [ Intelligence::Api::NotFound ]
+          ),
+          "applications.get.v1" => Read::Adapters::ApplicationsGet.new(
+            application_api:,
+            workspace_scope:,
+            not_found_errors: [ PersonalCrm::Api::NotFound ]
           )
         }
       )
