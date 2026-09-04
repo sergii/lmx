@@ -146,7 +146,9 @@ export default function NewOpening() {
             <Field label="Remote policy" hint="Optional">
               <Input
                 value={form.remote_policy}
-                onChange={(event) => update("remote_policy", event.target.value)}
+                onChange={(event) =>
+                  update("remote_policy", event.target.value)
+                }
                 placeholder="Remote, hybrid, on-site…"
               />
             </Field>
