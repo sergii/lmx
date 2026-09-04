@@ -7,7 +7,7 @@ module MarketCatalog
     class InvalidInput < StandardError; end
     class ContractViolation < StandardError; end
 
-    COMMAND_NAME = "market_catalog.submit_manual_opening"
+    COMMAND_NAME = "job_opening.submit_manual"
     CREATED_EVENT = "job_opening.created"
     SUBMITTED_EVENT = "job_opening.manual_submission_recorded"
     AGGREGATE_TYPE = "JobOpening"
