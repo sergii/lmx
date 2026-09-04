@@ -88,6 +88,30 @@ RSpec.describe Integration::ReadStack do
     end.new
   end
 
+  let(:application_api) do
+    Class.new do
+      class Missing < StandardError; end
+
+      attr_reader :requests
+
+      def initialize
+        @requests = []
+      end
+
+      def fetch_application(workspace_id:, application_id:)
+        @requests << { workspace_id:, application_id: }
+        {
+          id: application_id,
+          workspace_id:,
+          candidate_id: "candidate_opaque",
+          job_opening_id: "opening_opaque",
+          stage: "applied",
+          next_action: "Follow up"
+        }
+      end
+    end.new
+  end
+
   let(:credential_source) do
     Class.new do
       attr_reader :contexts
@@ -125,7 +149,8 @@ RSpec.describe Integration::ReadStack do
       workspace_api:,
       candidate_api:,
       opening_api:,
-      match_api:
+      match_api:,
+      application_api:
     )
   end
 
@@ -218,18 +243,28 @@ RSpec.describe Integration::ReadStack do
     expect(workspace_api.workspace_ids).to eq([ "org_opaque" ])
   end
 
-  it "keeps applications.get explicitly unimplemented until canonical Personal CRM exists" do
+  it "composes applications.get through the canonical Personal CRM public API" do
     result = adapter.call(
       name: "applications.get",
-      arguments: { id: "application_opaque" },
+      arguments: { id: "application_attempt_opaque" },
       context:
     )
 
-    expect(result[:isError]).to be(true)
-    expect(result.dig(:structuredContent, :error)).to include(
-      code: "not_implemented",
-      details: { contract: "applications.get.v1" }
+    expect(result[:isError]).to be(false)
+    expect(result.dig(:structuredContent, :data)).to include(
+      id: "application_attempt_opaque",
+      workspace_id: "org_opaque",
+      candidate_id: "candidate_opaque",
+      job_opening_id: "opening_opaque",
+      stage: "applied",
+      next_action: "Follow up"
     )
-    expect(workspace_api.workspace_ids).to be_empty
+    expect(result.dig(:structuredContent, :meta, :provenance)).to eq(
+      adapter: "personal_crm.public_api"
+    )
+    expect(application_api.requests).to eq(
+      [ { workspace_id: "org_opaque", application_id: "application_attempt_opaque" } ]
+    )
+    expect(workspace_api.workspace_ids).to eq([ "org_opaque" ])
   end
 end
