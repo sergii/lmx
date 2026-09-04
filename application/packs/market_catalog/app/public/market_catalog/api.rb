@@ -17,17 +17,16 @@ module MarketCatalog
       opening_snapshot(CreateOpening.call(**attributes))
     end
 
-    def submit_manual_opening(**attributes)
-      result = SubmitManualOpening.call(**attributes)
-      opening_id = result[:opening_id] || result["opening_id"]
-      posting_id = result[:posting_id] || result["posting_id"]
-      created = result.key?(:created) ? result[:created] : result["created"]
+    def submit_opening(**attributes)
+      submission_snapshot(SubmitOpening.call(**attributes))
+    rescue SubmitOpening::InvalidInput => error
+      raise InvalidInput, error.message
+    rescue SubmitOpening::ContractViolation => error
+      raise ContractViolation, error.message
+    end
 
-      {
-        opening: fetch_opening(opening_id:),
-        posting: posting_id && fetch_posting(posting_id:),
-        created:
-      }.freeze
+    def submit_manual_opening(**attributes)
+      submission_snapshot(SubmitManualOpening.call(**attributes))
     rescue SubmitManualOpening::InvalidInput => error
       raise InvalidInput, error.message
     rescue SubmitManualOpening::ContractViolation => error
@@ -81,6 +80,19 @@ module MarketCatalog
 
       posting.snapshots.order(:observed_at, :created_at).map { posting_snapshot(_1) }.freeze
     end
+
+    def submission_snapshot(result)
+      opening_id = result[:opening_id] || result["opening_id"]
+      posting_id = result[:posting_id] || result["posting_id"]
+      created = result.key?(:created) ? result[:created] : result["created"]
+
+      {
+        opening: fetch_opening(opening_id:),
+        posting: posting_id && fetch_posting(posting_id:),
+        created:
+      }.freeze
+    end
+    private_class_method :submission_snapshot
 
     def company_snapshot(company)
       {
