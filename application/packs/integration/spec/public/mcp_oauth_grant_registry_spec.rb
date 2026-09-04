@@ -139,25 +139,24 @@ RSpec.describe Integration::McpOauthGrantRegistry do
 
   it "rejects capabilities outside the target membership authorization" do
     admin_user = create_user(name: "Capability Admin", email: "capability-admin@example.com")
-    client_user = create_user(name: "Client Member", email: "client-member@example.com")
-    client_company = ClientCompany.create!(organization: workspace, name: "Client Company")
+    target_user = create_user(name: "Inactive Target", email: "inactive-target@example.com")
     admin = Membership.create!(user: admin_user, organization: workspace, role: "workspace_admin")
-    client_member = Membership.create!(
-      user: client_user,
+    target = Membership.create!(
+      user: target_user,
       organization: workspace,
-      role: "client_hiring_manager",
-      client_company:
+      role: "recruiter",
+      active: false
     )
 
     expect do
       described_class.create_membership_grant(
         workspace_id: workspace.typed_id,
-        membership_id: client_member.typed_id,
+        membership_id: target.typed_id,
         managed_by_membership_id: admin.typed_id,
         issuer: "https://auth.example.test/issuer",
-        subject: "external-client",
-        client_id: "client-mcp",
-        credential: "mcp-oauth:client",
+        subject: "external-inactive-target",
+        client_id: "inactive-target-client",
+        credential: "mcp-oauth:inactive-target",
         capabilities: %w[read:openings]
       )
     end.to raise_error(
