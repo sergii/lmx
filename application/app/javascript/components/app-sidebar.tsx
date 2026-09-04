@@ -1,5 +1,6 @@
 import { Link, usePage } from "@inertiajs/react"
 import {
+  Bot,
   BriefcaseBusiness,
   Building2,
   CalendarDays,
@@ -140,6 +141,11 @@ export function AppSidebar() {
             </SidebarMenu>
             <NavMain
               items={[
+                {
+                  title: "Agent access",
+                  href: "/settings/agent-access",
+                  icon: Bot,
+                },
                 {
                   title: "Workspace settings",
                   href: "/settings/workspace",

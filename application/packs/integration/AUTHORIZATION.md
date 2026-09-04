@@ -114,6 +114,23 @@ The persisted grant registry is intentionally looked up before workspace context
 
 `LMX_MCP_OAUTH_GRANTS` remains only as an optional migration fallback. Persisted active grants are authoritative when present; new production user grants should use the membership-constrained registry path instead of JSON environment configuration.
 
+## Workspace admin control plane
+
+`GET /settings/agent-access` is the browser control plane for persisted MCP OAuth access. The route is hidden from non-admin workspace members and all mutations enter through `Integration::McpOauthGrantAdmin`, which rechecks the active `workspace_admin` membership before touching the registry.
+
+The page keeps revoked grants visible and shows four distinct authorization layers rather than collapsing them into one permission list:
+
+- token scopes - verified at request time and intentionally not persisted in the UI
+- stored grant capabilities - the local maximum recorded for the external identity
+- current Workspace maximum - recomputed from the target membership for typed user principals
+- effective ceiling - the current local intersection before request-time token scopes are applied
+
+For membership-bound grants, admins can narrow or expand the stored capability set only inside the current Workspace policy maximum. Revocation and restoration record the managing membership in the existing append-only grant audit history.
+
+Trusted service-principal grants are visible and revocable from the same control plane, but their capability ceiling is intentionally read-only there because they are not derived from a Workspace role. Creating or changing service-principal authorization remains a separate trusted composition concern.
+
+The control plane does not create a new external OAuth identity. Provisioning or pairing an OAuth subject/client tuple is still separate from inspecting and governing grants that LMX already knows about.
+
 ## Roles versus capabilities
 
 Workspace roles remain an authorization implementation concern and are not copied into versioned Integration contracts. The translation happens only at trusted server-side composition.
@@ -133,7 +150,8 @@ Tool discovery is not the security boundary. A client may know that `openings.su
 - local JWT/JWKS verification as an alternative to online token introspection
 - persisted bootstrap bearer credential issuance, rotation, revocation, and secret verification
 - client-scoped MCP contracts that preserve client-company/record-level ActionPolicy constraints
-- browser/admin UI or public HTTP API for capability administration
+- OAuth pairing/consent flow for creating new external identities from the browser
+- a public HTTP API for capability administration
 - stricter identity-resolution capabilities
 
 These can be added behind the existing credential-source and authentication boundaries without changing the versioned read or command contracts.

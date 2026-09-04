@@ -56,6 +56,14 @@ Rails.application.routes.draw do
   resources :meetings, only: %i[index create update]
 
   namespace :settings do
+    resource :agent_access, only: :show, controller: "agent_access"
+    resources :mcp_oauth_grants, path: "agent-access/grants", only: [] do
+      member do
+        patch :capabilities
+        post :revoke
+        post :restore
+      end
+    end
     resource :workspace, only: %i[show update]
     resource :team, only: %i[show create]
     resource :profile, only: [ :show, :update ]
