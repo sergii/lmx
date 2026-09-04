@@ -10,6 +10,7 @@ module Integration
       SERVER_INFO_META_KEY = "io.modelcontextprotocol/serverInfo"
       PROTOCOL_VERSION_META_KEY = "io.modelcontextprotocol/protocolVersion"
       CLIENT_CAPABILITIES_META_KEY = "io.modelcontextprotocol/clientCapabilities"
+      IDEMPOTENCY_KEY_META_KEY = "com.lmx/idempotencyKey"
 
       PARSE_ERROR = -32_700
       INVALID_REQUEST = -32_600
@@ -155,18 +156,28 @@ module Integration
         arguments = params.fetch("arguments", {})
         raise ArgumentError, "tool arguments must be an object" unless arguments.is_a?(Hash)
 
-        adapter, context = adapter_and_context(name:, request_id: request.fetch("id"))
+        meta = params.fetch("_meta", {})
+        raise ArgumentError, "_meta must be an object" unless meta.is_a?(Hash)
+
+        adapter, context = adapter_and_context(
+          name:,
+          request_id: request.fetch("id"),
+          idempotency_key: meta[IDEMPOTENCY_KEY_META_KEY]
+        )
         raise ArgumentError, "unknown MCP tool: #{name}" unless adapter
 
         result = stringify_keys(adapter.call(name:, arguments:, context:))
         success_response(request.fetch("id"), result, modern:)
       end
 
-      def adapter_and_context(name:, request_id:)
+      def adapter_and_context(name:, request_id:, idempotency_key: nil)
         if read_tool_names.include?(name)
           [ read_adapter, identity.read_context(request_id:) ]
         elsif command_tool_names.include?(name)
-          [ command_adapter, identity.command_context(request_id:, tool_name: name) ]
+          [
+            command_adapter,
+            identity.command_context(request_id:, tool_name: name, idempotency_key:)
+          ]
         end
       end
 
