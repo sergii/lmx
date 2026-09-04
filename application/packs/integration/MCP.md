@@ -100,9 +100,39 @@ Requests use:
 Authorization: Bearer <raw token>
 ```
 
-Missing or invalid credentials receive HTTP 401 with `WWW-Authenticate: Bearer realm="lmx-mcp"`. The credential entry, not tool arguments or MCP `_meta`, supplies workspace, principal, credential reference, actor/executor provenance, trusted client label, and server-side capabilities.
+When OAuth resource discovery is not configured, missing or invalid credentials receive HTTP 401 with `WWW-Authenticate: Bearer realm="lmx-mcp"`. The credential entry, not tool arguments or MCP `_meta`, supplies workspace, principal, credential reference, actor/executor provenance, trusted client label, and server-side capabilities.
 
-This bootstrap bearer mechanism is deliberately not presented as full MCP OAuth. Automatic OAuth 2.1 authorization-server discovery, RFC 9728 Protected Resource Metadata, token issuance/refresh/revocation, and scope step-up remain a later slice. Clients that require the MCP OAuth discovery flow will need that follow-up rather than this pre-shared token mode.
+## OAuth protected resource discovery
+
+LMX can publish RFC 9728 OAuth 2.0 Protected Resource Metadata for the public MCP resource. Because the protected resource is the exact `https://.../mcp` URL, RFC 9728 inserts its well-known suffix before that resource path:
+
+```text
+https://lmx.example.com/mcp
+        |
+        v
+https://lmx.example.com/.well-known/oauth-protected-resource/mcp
+```
+
+Configure the discovery document with:
+
+```sh
+export LMX_MCP_OAUTH_RESOURCE="https://lmx.example.com/mcp"
+export LMX_MCP_OAUTH_AUTHORIZATION_SERVERS="https://auth.example.com"
+export LMX_MCP_OAUTH_SCOPES="read:openings read:candidates read:matches submit:openings assess:matches"
+export LMX_MCP_OAUTH_RESOURCE_NAME="LMX MCP"
+```
+
+The metadata endpoint returns the exact resource identifier, authorization-server issuer list, `bearer_methods_supported: ["header"]`, optional scopes, and the human-readable resource name. Resource and authorization-server identifiers must use HTTPS and must not contain fragments; the configured resource must identify LMX's actual `/mcp` endpoint.
+
+When this metadata is configured, HTTP 401 responses advertise it using RFC 9728:
+
+```http
+WWW-Authenticate: Bearer realm="lmx-mcp", resource_metadata="https://lmx.example.com/.well-known/oauth-protected-resource/mcp", scope="read:openings ..."
+```
+
+This slice establishes standards-compliant resource discovery only. The current request authenticator still verifies the bootstrap pre-shared bearer credentials described above. Do not enable OAuth discovery in a production deployment until a verifier for access tokens issued by the advertised authorization server is composed into `McpHttpRuntime`; otherwise an OAuth-capable client can discover an issuer and obtain a token that LMX does not yet accept.
+
+LMX should remain a protected resource rather than becoming an authorization server by default. The next authorization slice should validate issuer-bound access tokens from an external OAuth/OIDC authorization server, map trusted subject/client/workspace claims into `RuntimeIdentity`, and intersect token scopes with Integration capabilities. The MCP `2026-07-28` specification deprecates Dynamic Client Registration in favor of Client ID Metadata Documents, so new LMX work should not build a DCR dependency into the resource server.
 
 ## Read tools
 
@@ -163,7 +193,8 @@ Neither stdio nor HTTP bypasses those adapters. The transport layer validates pr
 
 Still intentionally absent:
 
-- MCP OAuth 2.1 authorization server/resource metadata flow
+- OAuth/OIDC access-token validation against the advertised authorization server
+- issuer/audience/resource validation and RFC 9207 authorization-response issuer checks on the client/authorization-server side
 - persisted agent credential issuance, rotation, revocation, and capability administration
 - browser CORS/preflight support for arbitrary web MCP clients
 - MCP resources/prompts/subscriptions/tasks

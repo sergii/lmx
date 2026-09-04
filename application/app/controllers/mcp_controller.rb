@@ -17,6 +17,16 @@ class McpController < ActionController::API
     render json: { error: "mcp_http_unavailable" }, status: :service_unavailable
   end
 
+  def oauth_protected_resource_metadata
+    metadata = Integration::McpOauthResourceMetadata.build(environment: ENV)
+    response.set_header("Cache-Control", "public, max-age=300")
+    render json: metadata.to_h
+  rescue Integration::McpOauthResourceMetadata::NotConfigured
+    head :not_found
+  rescue Integration::McpOauthResourceMetadata::ConfigurationError
+    render json: { error: "mcp_oauth_metadata_unavailable" }, status: :service_unavailable
+  end
+
   private
 
   def bearer_token!
@@ -28,7 +38,10 @@ class McpController < ActionController::API
   end
 
   def unauthorized
-    response.set_header("WWW-Authenticate", 'Bearer realm="lmx-mcp"')
+    challenge = Integration::McpOauthResourceMetadata.challenge(environment: ENV)
+    response.set_header("WWW-Authenticate", challenge)
     render json: { error: "unauthorized" }, status: :unauthorized
+  rescue Integration::McpOauthResourceMetadata::ConfigurationError
+    render json: { error: "mcp_oauth_metadata_unavailable" }, status: :service_unavailable
   end
 end

@@ -43,14 +43,24 @@ Both paths require the returned authorization evidence to match the exact `works
 
 ## Credential source boundary
 
-The credential source is intentionally server-side. MCP, HTTP, CLI, and agent clients never provide their own capability arrays. A future source may be backed by:
+The credential source is intentionally server-side. MCP, HTTP, CLI, and agent clients never provide their own capability arrays. Sources can be backed by:
 
-- Integration-owned agent credential persistence and explicit tool grants
-- delegated user credentials whose workspace access has already been resolved by trusted authentication/authorization composition
+- the current trusted local stdio runtime identity
+- the current HTTP bootstrap bearer credential store
+- future Integration-owned agent credential persistence and explicit tool grants
+- future delegated OAuth access tokens whose trusted claims and scopes have been verified server-side
 - service credentials with workspace-specific grants
-- a composition layer that intersects credential scope with Workspace authorization facts
+- a composition layer that intersects credential or token scope with Workspace authorization facts
 
 The authorization contract does not depend on which persistence or authentication mechanism is selected.
+
+## Remote MCP authentication
+
+The HTTP MCP boundary currently authenticates pre-shared high-entropy bearer credentials configured server-side as SHA-256 digests. A successful lookup constructs `RuntimeIdentity`, and its credential source feeds the same capability authorization used by all other Integration ingress paths.
+
+LMX can also publish RFC 9728 Protected Resource Metadata and advertise it in `WWW-Authenticate` challenges. That discovery document describes the exact public `/mcp` resource, authorization-server issuers, supported bearer transport, and optional OAuth scopes. Resource discovery is not token validation: until the OAuth verifier slice lands, the HTTP runtime still accepts only the bootstrap credentials it can verify itself.
+
+OAuth token scopes must never become a second independent authorization system. The future verifier should map trusted token identity into the existing context and intersect verified scopes with the capabilities recognized by Integration. Workspace authorization remains a separate server-side fact.
 
 ## Roles versus capabilities
 
@@ -68,9 +78,10 @@ Tool discovery is not the security boundary. A client may know that `openings.su
 
 ## Still intentionally deferred
 
-- persistence and secret verification for agent credentials
+- OAuth/OIDC access-token verification against advertised authorization-server issuers
+- issuer/audience/resource and expiry validation for remote OAuth credentials
+- persisted agent credential issuance, rotation, revocation, and secret verification
 - concrete Workspace/ActionPolicy-to-credential-grant composition
-- MCP authentication middleware that establishes the trusted principal and credential reference
 - capability administration UI/API
 - stricter identity-resolution capabilities
 
