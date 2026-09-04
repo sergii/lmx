@@ -61,7 +61,7 @@ fetch_application(workspace_id:, application_id:)
 
 `application_id` is an opaque `application_attempt` TypeID. Integration does not query Personal CRM projections directly or interpret stage data. `PersonalCrm::Api` owns the projection snapshot and preserves the accepted event-stream semantics where the same Candidate may have multiple independent attempts against the same JobOpening.
 
-The adapter first enters `Workspace::Api.with_workspace`, then passes the same workspace identifier to `PersonalCrm::Api.fetch_application`. Missing, invalid, and cross-workspace application attempts are normalized from `PersonalCrm::Api::NotFound` to the Integration `not_found` outcome. The contract requires `read:applications`.
+The adapter first enters `Workspace::Api.with_workspace`, then passes the same workspace identifier to `PersonalCrm::Api.fetch_application`. Missing or cross-workspace application attempts are normalized from `PersonalCrm::Api::NotFound` to the Integration `not_found` outcome. Malformed application identifiers are normalized from `PersonalCrm::Api::InvalidInput` to the Integration `invalid_input` outcome. The contract requires `read:applications`.
 
 ## Workspace execution scope
 
@@ -152,8 +152,8 @@ QueryRouter
         +--> PersonalCrm::Api
 ```
 
-## Not-found mapping
+## Error mapping
 
-The low-level adapters accept `not_found_errors:` and normalize only configured owning-package lookup failures to `Integration::Read::Error::NotFound`. Unexpected exceptions are re-raised.
+The low-level read adapters normalize only configured owning-package failures. Unexpected exceptions are re-raised rather than being disguised as domain outcomes.
 
-Concrete composition uses only public package errors: `Workspace::Api::NotFound`, `MarketCatalog::Api::NotFound`, `TalentProfile::Api::NotFound`, `Intelligence::Api::NotFound`, and `PersonalCrm::Api::NotFound`. ActiveRecord lookup exceptions do not cross owning-package application boundaries or appear in Integration composition.
+Concrete application composition maps `PersonalCrm::Api::NotFound` to `Integration::Read::Error::NotFound` and `PersonalCrm::Api::InvalidInput` to `Integration::Read::Error::InvalidInput`. Other concrete lookup adapters use their owning public `NotFound` errors. ActiveRecord lookup exceptions do not cross owning-package application boundaries or appear in Integration composition.
