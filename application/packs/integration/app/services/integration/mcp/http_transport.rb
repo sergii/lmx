@@ -62,6 +62,8 @@ module Integration
         request_id = body["id"]
         protocol_version = header(request, "HTTP_MCP_PROTOCOL_VERSION")
         method = header(request, "HTTP_MCP_METHOD")
+        params = body["params"]
+        meta = params.is_a?(Hash) ? params["_meta"] : nil
 
         return header_mismatch(request_id, "MCP-Protocol-Version", Server::MODERN_PROTOCOL_VERSION, nil) if protocol_version.empty?
         unless protocol_version == Server::MODERN_PROTOCOL_VERSION
@@ -74,7 +76,7 @@ module Integration
           )
         end
 
-        body_version = body.dig("params", "_meta", Server::PROTOCOL_VERSION_META_KEY)
+        body_version = meta.is_a?(Hash) ? meta[Server::PROTOCOL_VERSION_META_KEY] : nil
         unless body_version.to_s == protocol_version
           return header_mismatch(request_id, "MCP-Protocol-Version", body_version, protocol_version)
         end
@@ -86,7 +88,7 @@ module Integration
         return unless body_method == "tools/call"
 
         name = header(request, "HTTP_MCP_NAME")
-        body_name = body.dig("params", "name")
+        body_name = params.is_a?(Hash) ? params["name"] : nil
         return header_mismatch(request_id, "Mcp-Name", body_name, nil) if name.empty?
         return header_mismatch(request_id, "Mcp-Name", body_name, name) unless name == body_name
 
