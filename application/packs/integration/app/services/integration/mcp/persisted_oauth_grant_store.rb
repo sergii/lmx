@@ -5,6 +5,11 @@ require "digest"
 module Integration
   module Mcp
     class PersistedOauthGrantStore
+      def initialize(workspace_api: Workspace::Api, grant_policy: WorkspaceGrantPolicy.new)
+        @workspace_api = workspace_api
+        @grant_policy = grant_policy
+      end
+
       def resolve(claims)
         grant = McpOauthGrant.active.includes(:organization).find_by(
           issuer: claims.issuer,
@@ -14,6 +19,8 @@ module Integration
         return unless grant
 
         capabilities = grant.capabilities & claims.scopes
+        workspace_capabilities = workspace_capabilities_for(grant)
+        capabilities &= workspace_capabilities if workspace_capabilities
         return if capabilities.empty?
 
         RuntimeIdentity.new(
@@ -29,6 +36,24 @@ module Integration
       end
 
       private
+
+      def workspace_capabilities_for(grant)
+        return unless user_principal?(grant.principal)
+
+        membership = @workspace_api.fetch_membership_for_user(
+          workspace_id: grant.workspace_id,
+          user_id: grant.principal
+        )
+        @grant_policy.capabilities_for(membership)
+      rescue Workspace::Api::InvalidInput, Workspace::Api::NotFound
+        []
+      end
+
+      def user_principal?(principal)
+        TypeID.from_string(principal).prefix == "user"
+      rescue TypeID::Error
+        false
+      end
 
       def runtime_id(grant)
         fingerprint = Digest::SHA256.hexdigest(
