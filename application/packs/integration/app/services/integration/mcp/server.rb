@@ -17,14 +17,23 @@ module Integration
       METHOD_NOT_FOUND = -32_601
       INVALID_PARAMS = -32_602
       INTERNAL_ERROR = -32_603
+      HEADER_MISMATCH = -32_020
       UNSUPPORTED_PROTOCOL_VERSION = -32_022
 
-      def initialize(read_adapter:, command_adapter:, identity:, server_name: SERVER_NAME, server_version: SERVER_VERSION)
+      def initialize(
+        read_adapter:,
+        command_adapter:,
+        identity:,
+        server_name: SERVER_NAME,
+        server_version: SERVER_VERSION,
+        require_explicit_write_idempotency: false
+      )
         @read_adapter = read_adapter
         @command_adapter = command_adapter
         @identity = identity
         @server_name = server_name.to_s.freeze
         @server_version = server_version.to_s.freeze
+        @require_explicit_write_idempotency = require_explicit_write_idempotency
         @era = nil
         @legacy_initialized = false
       end
@@ -40,16 +49,20 @@ module Integration
         method = request["method"]
         return error_response(request["id"], INVALID_REQUEST, "method must be a string") unless method.is_a?(String)
 
+        validate_modern_request!(request) if modern_request?(request)
         return handle_notification(request) unless request.key?("id")
 
         case method
         when "server/discover"
-          lock_era!(:modern)
-          success_response(request.fetch("id"), discover_result, modern: true)
+          handle_discover(request)
         when "initialize"
           handle_initialize(request)
         when "ping"
-          handle_ping(request)
+          if modern_request?(request)
+            error_response(request.fetch("id"), METHOD_NOT_FOUND, "Method not found")
+          else
+            handle_ping(request)
+          end
         when "tools/list"
           handle_tools_list(request)
         when "tools/call"
@@ -86,7 +99,8 @@ module Integration
         end
       end
 
-      attr_reader :read_adapter, :command_adapter, :identity, :server_name, :server_version
+      attr_reader :read_adapter, :command_adapter, :identity, :server_name, :server_version,
+        :require_explicit_write_idempotency
 
       def handle_notification(request)
         return nil unless request.fetch("method") == "notifications/initialized"
@@ -95,6 +109,11 @@ module Integration
         lock_era!(:legacy)
         @legacy_initialized = true
         nil
+      end
+
+      def handle_discover(request)
+        lock_era!(:modern)
+        success_response(request.fetch("id"), discover_result, modern: true)
       end
 
       def handle_initialize(request)
@@ -117,21 +136,12 @@ module Integration
       end
 
       def handle_ping(request)
-        modern = modern_request?(request)
-        if modern
-          lock_era!(:modern)
-          validate_modern_request!(request)
-        elsif @era == :modern
-          raise EraConflict, "MCP connection is already locked to modern lifecycle"
-        end
-
-        success_response(request.fetch("id"), {}, modern:)
+        success_response(request.fetch("id"), {}, modern: false)
       end
 
       def handle_tools_list(request)
         modern = modern_request?(request)
         lock_era!(modern ? :modern : :legacy)
-        validate_modern_request!(request) if modern
         ensure_legacy_ready! unless modern
 
         result = { "tools" => all_tools }
@@ -146,7 +156,6 @@ module Integration
       def handle_tools_call(request)
         modern = modern_request?(request)
         lock_era!(modern ? :modern : :legacy)
-        validate_modern_request!(request) if modern
         ensure_legacy_ready! unless modern
 
         params = object_params(request)
@@ -159,10 +168,18 @@ module Integration
         meta = params.fetch("_meta", {})
         raise ArgumentError, "_meta must be an object" unless meta.is_a?(Hash)
 
+        idempotency_key = meta[IDEMPOTENCY_KEY_META_KEY]
+        if !idempotency_key.nil? && !idempotency_key.is_a?(String)
+          raise ArgumentError, "#{IDEMPOTENCY_KEY_META_KEY} must be a string"
+        end
+        if require_explicit_write_idempotency && command_tool_names.include?(name) && idempotency_key.to_s.strip.empty?
+          raise ArgumentError, "write tool requires #{IDEMPOTENCY_KEY_META_KEY}"
+        end
+
         adapter, context = adapter_and_context(
           name:,
           request_id: request.fetch("id"),
-          idempotency_key: meta[IDEMPOTENCY_KEY_META_KEY]
+          idempotency_key:
         )
         raise ArgumentError, "unknown MCP tool: #{name}" unless adapter
 
@@ -215,7 +232,10 @@ module Integration
       end
 
       def modern_request?(request)
-        meta = request.dig("params", "_meta")
+        params = request["params"]
+        return false unless params.is_a?(Hash)
+
+        meta = params["_meta"]
         meta.is_a?(Hash) && meta.key?(PROTOCOL_VERSION_META_KEY)
       end
 

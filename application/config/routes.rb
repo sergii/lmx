@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 Rails.application.routes.draw do
+  post "mcp", to: "mcp#create", as: :mcp
+
   get  "sign_in", to: "sessions#new", as: :sign_in
   post "sign_in", to: "sessions#create"
   get  "sign_up", to: "users#new", as: :sign_up
