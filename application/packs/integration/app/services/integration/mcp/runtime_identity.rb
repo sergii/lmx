@@ -1,17 +1,27 @@
 # frozen_string_literal: true
 
 require "digest"
+require "securerandom"
 
 module Integration
   module Mcp
     class RuntimeIdentity
       ATTRIBUTES = %i[
-        workspace_id principal credential actor executor client capabilities
+        workspace_id principal credential actor executor client capabilities runtime_id
       ].freeze
 
       attr_reader(*ATTRIBUTES)
 
-      def initialize(workspace_id:, principal:, credential:, actor:, executor:, client:, capabilities:)
+      def initialize(
+        workspace_id:,
+        principal:,
+        credential:,
+        actor:,
+        executor:,
+        client:,
+        capabilities:,
+        runtime_id: SecureRandom.uuid
+      )
         @workspace_id = required_string(workspace_id, :workspace_id)
         @principal = required_string(principal, :principal)
         @credential = required_string(credential, :credential)
@@ -19,6 +29,7 @@ module Integration
         @executor = required_string(executor, :executor)
         @client = required_string(client, :client)
         @capabilities = normalize_capabilities(capabilities)
+        @runtime_id = required_string(runtime_id, :runtime_id)
         freeze
       end
 
@@ -54,8 +65,12 @@ module Integration
         )
       end
 
-      def command_context(request_id:, tool_name:, correlation_id: nil)
-        fingerprint = command_fingerprint(request_id:, tool_name:)
+      def command_context(request_id:, tool_name:, idempotency_key: nil, correlation_id: nil)
+        fingerprint = command_fingerprint(
+          request_id:,
+          tool_name:,
+          idempotency_key:
+        )
 
         Command::Context.new(
           workspace_id:,
@@ -94,12 +109,16 @@ module Integration
         normalized.freeze
       end
 
-      def command_fingerprint(request_id:, tool_name:)
-        request = required_string(request_id, :request_id)
+      def command_fingerprint(request_id:, tool_name:, idempotency_key:)
         tool = required_string(tool_name, :tool_name)
+        identity = if idempotency_key.nil?
+          [ "runtime", runtime_id, required_string(request_id, :request_id) ]
+        else
+          [ "client", required_string(idempotency_key, :idempotency_key) ]
+        end
 
         Digest::SHA256.hexdigest(
-          [ workspace_id, principal, credential, client, request, tool ].join("\0")
+          [ workspace_id, principal, credential, client, tool, *identity ].join("\0")
         )
       end
     end
