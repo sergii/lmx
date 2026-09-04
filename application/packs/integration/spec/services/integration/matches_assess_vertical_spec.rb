@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "json"
 require "rails_helper"
 
 RSpec.describe "matches.assess MCP vertical slice", type: :model do
@@ -122,6 +123,25 @@ RSpec.describe "matches.assess MCP vertical slice", type: :model do
       expect(
         reliability_count("platform_outbox_messages", "message_type", Intelligence::Api::MATCH_ASSESSMENT_RECORDED)
       ).to eq(1)
+      expect(
+        reliability_count("platform_outbox_messages", "message_type", Intelligence::Api::TELEGRAM_OPPORTUNITY_MESSAGE)
+      ).to eq(1)
+
+      notification = outbox_payload(Intelligence::Api::TELEGRAM_OPPORTUNITY_MESSAGE)
+      expect(notification).to include(
+        "notification_kind" => "opportunity_assessed",
+        "assessment_id" => assessment_id,
+        "candidate_id" => candidate_id,
+        "job_opening_id" => opening_id,
+        "assessment_version" => 1,
+        "title" => "Senior Ruby Engineer",
+        "opportunity_score" => 88.5,
+        "action_priority" => 94.0,
+        "recommendation" => "Apply now"
+      )
+      expect(notification.fetch("strengths")).to eq([ "deep Rails experience" ])
+      expect(notification.fetch("gaps")).to eq([ "domain-specific context" ])
+      expect(notification.fetch("interview_angles")).to eq([ "production ownership" ])
     end
 
     read_adapter = Integration::ReadStack.build(credential_source:)
@@ -223,5 +243,14 @@ RSpec.describe "matches.assess MCP vertical slice", type: :model do
       "SELECT COUNT(*) FROM #{connection.quote_table_name(table)} " \
         "WHERE #{connection.quote_column_name(column)} = #{connection.quote(value)}"
     ).to_i
+  end
+
+  def outbox_payload(message_type)
+    connection = ActiveRecord::Base.connection
+    raw = connection.select_value(
+      "SELECT payload::text FROM platform_outbox_messages " \
+        "WHERE message_type = #{connection.quote(message_type)} ORDER BY created_at DESC, id DESC LIMIT 1"
+    )
+    JSON.parse(raw)
   end
 end

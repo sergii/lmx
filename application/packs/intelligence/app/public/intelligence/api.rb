@@ -8,17 +8,24 @@ module Intelligence
     class ContractViolation < Error; end
 
     MATCH_ASSESSMENT_RECORDED = "intelligence.match_assessment.recorded"
+    TELEGRAM_OPPORTUNITY_MESSAGE = "delivery.telegram.opportunity"
 
     module_function
 
-    def assess_match(workspace_id:, assessment:, command:, reliability_api: Platform::Reliability::Api)
+    def assess_match(
+      workspace_id:,
+      assessment:,
+      command:,
+      reliability_api: Platform::Reliability::Api,
+      market_api: MarketCatalog::Api
+    )
       assessment_attributes = normalize_public_hash(assessment, label: "assessment")
       command_attributes = normalize_public_hash(command, label: "command")
       validate_command_provenance!(command_attributes)
       recorded_at = Time.current
 
       snapshot = ActiveRecord::Base.transaction do
-        recorded = record_match_assessment(workspace_id:, **assessment_attributes)
+        recorded = record_match_assessment(workspace_id:, market_api:, **assessment_attributes)
         payload = match_recorded_payload(recorded)
 
         reliability_api.append_domain_event(
@@ -45,7 +52,14 @@ module Intelligence
             {
               message_type: MATCH_ASSESSMENT_RECORDED,
               message_version: 1,
-              payload: payload,
+              payload:,
+              available_at: recorded_at
+            },
+            {
+              message_type: TELEGRAM_OPPORTUNITY_MESSAGE,
+              message_version: 1,
+              destination: "telegram",
+              payload: telegram_opportunity_payload(recorded, market_api:),
               available_at: recorded_at
             }
           ]
@@ -166,6 +180,57 @@ module Intelligence
       }.freeze
     end
     private_class_method :match_recorded_payload
+
+    def telegram_opportunity_payload(assessment, market_api:)
+      opening = assessment.fetch(:opening_snapshot)
+      posting = telegram_posting_context(opening, market_api:)
+
+      {
+        "notification_kind" => "opportunity_assessed",
+        "assessment_id" => assessment.fetch(:id),
+        "candidate_id" => assessment.fetch(:candidate_id),
+        "job_opening_id" => assessment.fetch(:job_opening_id),
+        "assessment_version" => assessment.fetch(:version_number),
+        "title" => opening.fetch("canonical_title"),
+        "company_name" => telegram_company_name(opening, market_api:),
+        "source_key" => posting[:source_key],
+        "url" => posting[:url],
+        "opportunity_score" => assessment.fetch(:opportunity_score),
+        "action_priority" => assessment.fetch(:action_priority),
+        "recommendation" => assessment.fetch(:recommendation),
+        "strengths" => assessment.fetch(:strengths),
+        "gaps" => assessment.fetch(:gaps),
+        "risks" => assessment.fetch(:risks),
+        "interview_angles" => assessment.fetch(:interview_angles),
+        "generated_at" => assessment.fetch(:generated_at)
+      }.compact.freeze
+    end
+    private_class_method :telegram_opportunity_payload
+
+    def telegram_company_name(opening, market_api:)
+      company_id = opening["primary_company_id"]
+      fallback = opening.dig("metadata", "company_name")
+      return fallback if company_id.blank?
+
+      market_api.fetch_company(company_id:).fetch(:canonical_name)
+    rescue MarketCatalog::Api::NotFound, KeyError
+      fallback
+    end
+    private_class_method :telegram_company_name
+
+    def telegram_posting_context(opening, market_api:)
+      Array(opening["job_posting_ids"]).each do |posting_id|
+        posting = market_api.fetch_posting(posting_id:)
+        source_key = posting[:source_key].to_s.presence
+        url = posting[:application_url].to_s.presence || posting[:canonical_url].to_s.presence
+        return { source_key:, url: }.compact if source_key || url
+      rescue MarketCatalog::Api::NotFound
+        next
+      end
+
+      {}.freeze
+    end
+    private_class_method :telegram_posting_context
 
     def compact_frozen_hash(**attributes)
       attributes.compact.freeze

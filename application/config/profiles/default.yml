@@ -57,6 +57,7 @@ policies:
 
 notification:
   primary_surface: telegram
+  action_priority_threshold: 80
   prefer_near_real_time_for:
     - new_local_fast_opportunity
     - high_action_priority

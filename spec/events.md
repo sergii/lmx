@@ -43,6 +43,7 @@ job_opening.manual_submission_recorded
 job_opening.merged
 job_opening.merge_reverted
 job_opening.reopened
+intelligence.match_assessment.recorded
 personal_crm.opening.saved
 personal_crm.opening.ignored
 personal_crm.application.started
@@ -69,7 +70,12 @@ Examples:
 lmx.opportunity.high_priority.v1
 lmx.posting.changed.v1
 lmx.application.stage_changed.v1
+delivery.telegram.opportunity
 ```
+
+`intelligence.match_assessment.recorded` is the durable accepted assessment fact. A candidate-aware Telegram notification is a separate transactional Outbox message, `delivery.telegram.opportunity`, containing only the decision context needed by Delivery. Delivery may terminally suppress that transport message when its Action Priority is below the configured notification threshold; suppression does not remove or rewrite the underlying MatchAssessment or domain event.
+
+Transport-specific delivery messages are not a second source of business truth. The generic assessment integration message remains independently available to non-Telegram consumers.
 
 ## Telemetry
 

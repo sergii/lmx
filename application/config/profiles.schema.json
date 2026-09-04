@@ -76,7 +76,19 @@
       },
       "additionalProperties": true
     },
-    "notification": { "type": "object" }
+    "notification": {
+      "type": "object",
+      "properties": {
+        "primary_surface": { "type": "string", "minLength": 1 },
+        "action_priority_threshold": { "type": "number", "minimum": 0, "maximum": 100 },
+        "prefer_near_real_time_for": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    }
   },
   "additionalProperties": false
 }
