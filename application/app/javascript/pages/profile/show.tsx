@@ -209,7 +209,7 @@ export default function ProfileShow({
     setParseError(null)
     router.patch(
       "/profile",
-      { profile },
+      { profile: profile as ProfileData },
       {
         preserveScroll: true,
         onStart: () => setSaving(true),
