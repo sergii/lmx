@@ -49,8 +49,36 @@ jobs:
           bundler-cache: true
       - name: Build schema from migrations
         run: |
-          bin/rails db:drop db:create db:migrate
-          bin/rails db:structure:dump
+          bin/rails db:drop db:create db:structure:load
+          bin/rails runner 'ActiveRecord::Base.connection_pool.migration_context.migrate'
+
+          container_id="$(docker ps --filter ancestor=postgres:18.4 --format '{{.ID}}' | head -n 1)"
+          test -n "$container_id"
+          docker exec "$container_id" pg_dump \
+            --schema-only \
+            --no-privileges \
+            --no-owner \
+            --username=lmx \
+            lmx_test > db/structure.sql
+
+          mapfile -t versions < <(
+            docker exec "$container_id" psql \
+              --username=lmx \
+              --dbname=lmx_test \
+              --tuples-only \
+              --no-align \
+              --command='SELECT version FROM schema_migrations ORDER BY version'
+          )
+          {
+            printf '\n\nINSERT INTO public.schema_migrations (version) VALUES\n'
+            last_index=$((${#versions[@]} - 1))
+            for index in "${!versions[@]}"; do
+              suffix=','
+              if [ "$index" -eq "$last_index" ]; then suffix=';'; fi
+              printf "('%s')%s\n" "${versions[$index]}" "$suffix"
+            done
+          } >> db/structure.sql
+
           grep -q "20260904210000" db/structure.sql
           grep -q "integration_mcp_oauth_grants" db/structure.sql
           grep -q "integration_mcp_oauth_grant_events" db/structure.sql
