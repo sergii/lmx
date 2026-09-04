@@ -122,7 +122,7 @@ RSpec.describe "MCP HTTP endpoint", type: :request do
       "scopes_supported" => %w[read:openings submit:openings],
       "resource_name" => "LMX MCP Test"
     )
-    expect(response.headers["Cache-Control"]).to eq("public, max-age=300")
+    expect(response.headers["Cache-Control"].split(", ")).to contain_exactly("public", "max-age=300")
   end
 
   it "returns 404 for protected resource metadata until OAuth discovery is configured" do
