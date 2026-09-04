@@ -30,7 +30,8 @@ RSpec.describe Integration::Mcp::Server do
       actor: "human:serhii",
       executor: "agent:chatgpt",
       client: "chatgpt",
-      capabilities: %w[read:openings submit:openings]
+      capabilities: %w[read:openings submit:openings],
+      runtime_id: "runtime-server-spec"
     )
   end
   let(:read_adapter) do
@@ -125,7 +126,7 @@ RSpec.describe Integration::Mcp::Server do
       "params" => {
         "name" => "openings.submit",
         "arguments" => { "title" => "Senior Ruby Engineer" },
-        "_meta" => modern_meta
+        "_meta" => modern_meta.merge(described_class::IDEMPOTENCY_KEY_META_KEY => "submission-1")
       }
     )
 
@@ -140,6 +141,46 @@ RSpec.describe Integration::Mcp::Server do
     expect(command_context.command_id).to start_with("mcp-command:")
     expect(command_context.idempotency_key).to start_with("mcp-idempotency:")
     expect(command_context.principal).to eq("user:serhii")
+  end
+
+  it "keeps a client idempotency key stable when a write retry uses a different JSON-RPC id" do
+    first = server.call(
+      "jsonrpc" => "2.0",
+      "id" => "write-1",
+      "method" => "tools/call",
+      "params" => {
+        "name" => "openings.submit",
+        "arguments" => { "title" => "Senior Ruby Engineer" },
+        "_meta" => modern_meta.merge(described_class::IDEMPOTENCY_KEY_META_KEY => "submission-123")
+      }
+    )
+    retry_response = server.call(
+      "jsonrpc" => "2.0",
+      "id" => "write-retry",
+      "method" => "tools/call",
+      "params" => {
+        "name" => "openings.submit",
+        "arguments" => { "title" => "Senior Ruby Engineer" },
+        "_meta" => modern_meta.merge(described_class::IDEMPOTENCY_KEY_META_KEY => "submission-123")
+      }
+    )
+
+    expect(first.dig("result", "isError")).to be(false)
+    expect(retry_response.dig("result", "isError")).to be(false)
+    contexts = command_adapter.calls.map { _1.fetch(:context) }
+    expect(contexts.fetch(1).command_id).to eq(contexts.fetch(0).command_id)
+    expect(contexts.fetch(1).idempotency_key).to eq(contexts.fetch(0).idempotency_key)
+  end
+
+  it "supports ping before the legacy initialization handshake" do
+    response = server.call(
+      "jsonrpc" => "2.0",
+      "id" => 1,
+      "method" => "ping",
+      "params" => {}
+    )
+
+    expect(response.dig("result")).to eq({})
   end
 
   it "supports the legacy initialize lifecycle on a separate stdio connection" do
