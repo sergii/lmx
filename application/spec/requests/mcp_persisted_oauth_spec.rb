@@ -100,7 +100,7 @@ RSpec.describe "MCP persisted OAuth grants", type: :request do
   it "accepts an introspected token through a persisted local grant" do
     persist_grant
 
-    post "/mcp", params: body, headers:
+    post "/mcp", params: body, headers: headers
 
     expect(response).to have_http_status(:ok)
     expect(response.parsed_body.dig("result", "supportedVersions")).to eq([ "2026-07-28" ])
@@ -115,7 +115,7 @@ RSpec.describe "MCP persisted OAuth grants", type: :request do
       reason: "access removed"
     )
 
-    post "/mcp", params: body, headers:
+    post "/mcp", params: body, headers: headers
 
     expect(response).to have_http_status(:unauthorized)
     expect(response.parsed_body).to eq("error" => "unauthorized")
