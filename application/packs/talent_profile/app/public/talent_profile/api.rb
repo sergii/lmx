@@ -60,6 +60,19 @@ module TalentProfile
       raise NotFound, "candidate profile not found"
     end
 
+    def fetch_profile_versions(candidate_id:)
+      workspace = WorkspaceGuard.current!
+      candidate_uuid = Identifiers.uuid(candidate_id, prefix: "candidate")
+      versions = CandidateProfileVersion.for_organization(workspace)
+        .where(candidate_id: candidate_uuid)
+        .order(version_number: :desc)
+        .limit(100)
+
+      deep_freeze(versions.map { profile_version_snapshot(_1) })
+    rescue ArgumentError
+      raise NotFound, "candidate profile not found"
+    end
+
     def fetch_profile_version(candidate_id:, profile_version_id:)
       workspace = WorkspaceGuard.current!
       candidate_uuid = Identifiers.uuid(candidate_id, prefix: "candidate")

@@ -27,7 +27,7 @@ Raw observations and agent suggestions belong outside this canonical snapshot un
 
 ## Public API
 
-Other packages should use only `TalentProfile::Api` for Phase 0 operations:
+Other packages should use only `TalentProfile::Api` for canonical operations:
 
 - `create_candidate`
 - `record_evidence`
@@ -35,6 +35,7 @@ Other packages should use only `TalentProfile::Api` for Phase 0 operations:
 - `fetch_candidate`
 - `fetch_candidate_for_user` - canonical Candidate linked to one authenticated workspace User
 - `fetch_latest_profile` - latest canonical `CandidateProfileVersion` for a Candidate
+- `fetch_profile_versions` - newest-first immutable history of canonical profile versions
 - `fetch_profile_version` - one exact historical profile version
 
 The API accepts and returns TypeIDs and immutable snapshots rather than package-private ActiveRecord models. Latest-profile lookup remains distinct from exact historical-version lookup so callers can choose current convenience or reproducible provenance explicitly.
