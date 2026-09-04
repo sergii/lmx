@@ -49,6 +49,7 @@ module Integration
         method = request["method"]
         return error_response(request["id"], INVALID_REQUEST, "method must be a string") unless method.is_a?(String)
 
+        validate_modern_request!(request) if modern_request?(request)
         return handle_notification(request) unless request.key?("id")
 
         case method
@@ -98,11 +99,7 @@ module Integration
         end
       end
 
-      attr_reader :read_adapter,
-        :command_adapter,
-        :identity,
-        :server_name,
-        :server_version,
+      attr_reader :read_adapter, :command_adapter, :identity, :server_name, :server_version,
         :require_explicit_write_idempotency
 
       def handle_notification(request)
@@ -116,8 +113,6 @@ module Integration
 
       def handle_discover(request)
         lock_era!(:modern)
-        validate_modern_request!(request)
-
         success_response(request.fetch("id"), discover_result, modern: true)
       end
 
@@ -147,7 +142,6 @@ module Integration
       def handle_tools_list(request)
         modern = modern_request?(request)
         lock_era!(modern ? :modern : :legacy)
-        validate_modern_request!(request) if modern
         ensure_legacy_ready! unless modern
 
         result = { "tools" => all_tools }
@@ -162,7 +156,6 @@ module Integration
       def handle_tools_call(request)
         modern = modern_request?(request)
         lock_era!(modern ? :modern : :legacy)
-        validate_modern_request!(request) if modern
         ensure_legacy_ready! unless modern
 
         params = object_params(request)
@@ -239,7 +232,10 @@ module Integration
       end
 
       def modern_request?(request)
-        meta = request.dig("params", "_meta")
+        params = request["params"]
+        return false unless params.is_a?(Hash)
+
+        meta = params["_meta"]
         meta.is_a?(Hash) && meta.key?(PROTOCOL_VERSION_META_KEY)
       end
 
