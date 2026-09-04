@@ -7,12 +7,13 @@ Integration authorization is capability-based at the agent-facing boundary. It d
 | Contracts | Capability |
 | --- | --- |
 | `openings.search.v1`, `openings.get.v1` | `read:openings` |
+| `openings.submit.v1` | `submit:openings` |
 | `candidates.get.v1`, `candidates.profile.v1` | `read:candidates` |
 | `matches.get.v1` | `read:matches` |
 | `matches.assess.v1` | `assess:matches` |
 | `applications.get.v1` | `read:applications` |
 
-The required capability is metadata on the versioned Integration contract. Write capabilities are deliberately distinct from read capabilities; `read:matches` does not imply `assess:matches`.
+The required capability is metadata on the versioned Integration contract. Write capabilities are deliberately distinct from read capabilities; `read:openings` does not imply `submit:openings`, and `read:matches` does not imply `assess:matches`.
 
 ## Trust boundary
 
@@ -59,11 +60,11 @@ Do not map every active Workspace membership directly to global Integration capa
 
 ## Write authorization and idempotency
 
-For `matches.assess.v1`, authorization is evaluated before `Workspace::Api.with_workspace`, before Transactional Inbox receipt, and before Intelligence execution. A denied caller therefore creates no command record and no domain mutation.
+For `matches.assess.v1` and `openings.submit.v1`, authorization is evaluated before `Workspace::Api.with_workspace`, before Transactional Inbox receipt, and before the owning bounded-context command executes. A denied caller therefore creates no command record and no domain mutation.
 
 After authorization, stable `message_id`, `command_id`, and `idempotency_key` values plus principal/credential and actor/executor provenance enter the Platform reliability boundary. Retrying the identical command reconstructs the prior result; reusing its identity with a different payload fails explicitly.
 
-Tool discovery is not the security boundary. A client may know that `matches.assess` exists and still receive `unauthorized` when its server-resolved grant lacks `assess:matches`.
+Tool discovery is not the security boundary. A client may know that `openings.submit` or `matches.assess` exists and still receive `unauthorized` when its server-resolved grant lacks the corresponding write capability.
 
 ## Still intentionally deferred
 
