@@ -18,12 +18,12 @@ class McpController < ActionController::API
   end
 
   def oauth_protected_resource_metadata
-    metadata = Integration::McpOAuthResourceMetadata.build(environment: ENV)
+    metadata = Integration::McpOauthResourceMetadata.build(environment: ENV)
     response.set_header("Cache-Control", "public, max-age=300")
     render json: metadata.to_h
-  rescue Integration::McpOAuthResourceMetadata::NotConfigured
+  rescue Integration::McpOauthResourceMetadata::NotConfigured
     head :not_found
-  rescue Integration::McpOAuthResourceMetadata::ConfigurationError
+  rescue Integration::McpOauthResourceMetadata::ConfigurationError
     render json: { error: "mcp_oauth_metadata_unavailable" }, status: :service_unavailable
   end
 
@@ -38,10 +38,10 @@ class McpController < ActionController::API
   end
 
   def unauthorized
-    challenge = Integration::McpOAuthResourceMetadata.challenge(environment: ENV)
+    challenge = Integration::McpOauthResourceMetadata.challenge(environment: ENV)
     response.set_header("WWW-Authenticate", challenge)
     render json: { error: "unauthorized" }, status: :unauthorized
-  rescue Integration::McpOAuthResourceMetadata::ConfigurationError
+  rescue Integration::McpOauthResourceMetadata::ConfigurationError
     render json: { error: "mcp_oauth_metadata_unavailable" }, status: :service_unavailable
   end
 end
