@@ -69,8 +69,9 @@ module Integration
 
     def revoke_grant(workspace_id:, grant_id:, managed_by:, reason: nil, revoked_at: Time.current)
       mutate_grant(workspace_id:, grant_id:) do |grant|
+        manager = required_string(managed_by, :managed_by)
+
         if grant.active?
-          manager = required_string(managed_by, :managed_by)
           timestamp = revoked_at.respond_to?(:to_time) ? revoked_at.to_time : nil
           raise InvalidInput, "revoked_at must be time-like" unless timestamp
 
@@ -89,8 +90,9 @@ module Integration
 
     def restore_grant(workspace_id:, grant_id:, managed_by:)
       mutate_grant(workspace_id:, grant_id:) do |grant|
+        manager = required_string(managed_by, :managed_by)
+
         unless grant.active?
-          manager = required_string(managed_by, :managed_by)
           grant.update!(revoked_at: nil, revoked_by: nil, revoke_reason: nil)
           record_event!(grant, action: "restored", managed_by: manager)
         end
@@ -178,7 +180,13 @@ module Integration
         raise InvalidInput, "capabilities must be an array"
       end
 
-      normalized = values.map { required_string(_1, :capability) }.uniq.sort
+      normalized = values.map do |value|
+        unless value.is_a?(String) && !value.strip.empty?
+          raise InvalidInput, "capabilities must contain non-empty strings"
+        end
+
+        value.strip
+      end.uniq.sort
       raise InvalidInput, "capabilities must not be empty" if normalized.empty?
 
       normalized.freeze
@@ -186,7 +194,11 @@ module Integration
     private_class_method :normalize_capabilities
 
     def required_string(value, field)
-      string = value.to_s.strip
+      unless value.is_a?(String)
+        raise InvalidInput, "#{field} must be a string"
+      end
+
+      string = value.strip
       raise InvalidInput, "#{field} must be present" if string.empty?
 
       string
@@ -194,7 +206,10 @@ module Integration
     private_class_method :required_string
 
     def optional_string(value)
-      string = value.to_s.strip
+      return if value.nil?
+      raise InvalidInput, "optional identity values must be strings" unless value.is_a?(String)
+
+      string = value.strip
       string unless string.empty?
     end
     private_class_method :optional_string
