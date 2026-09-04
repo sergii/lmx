@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Integration
-  module McpOAuthResourceMetadata
+  module McpOauthResourceMetadata
     class ConfigurationError < StandardError; end
     class NotConfigured < ConfigurationError; end
 
