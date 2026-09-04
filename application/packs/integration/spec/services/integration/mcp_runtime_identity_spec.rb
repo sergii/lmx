@@ -11,7 +11,8 @@ RSpec.describe Integration::Mcp::RuntimeIdentity do
       actor: "human:serhii",
       executor: "agent:local",
       client: "codex",
-      capabilities: [ "read:openings", "submit:openings", "read:openings" ]
+      capabilities: [ "read:openings", "submit:openings", "read:openings" ],
+      runtime_id: "runtime-1"
     )
   end
 
@@ -43,7 +44,7 @@ RSpec.describe Integration::Mcp::RuntimeIdentity do
     expect(identity.credential_source.resolve(context)).to be_nil
   end
 
-  it "derives stable but tool-specific command identities from the JSON-RPC request id" do
+  it "derives stable but tool-specific fallback command identities within one runtime" do
     first = identity.command_context(request_id: 42, tool_name: "openings.submit")
     replay = identity.command_context(request_id: 42, tool_name: "openings.submit")
     other = identity.command_context(request_id: 42, tool_name: "matches.assess")
@@ -53,5 +54,39 @@ RSpec.describe Integration::Mcp::RuntimeIdentity do
     expect(other.command_id).not_to eq(first.command_id)
     expect(first.interface).to eq("mcp")
     expect(first.causation_id).to eq("42")
+  end
+
+  it "uses a client idempotency key as the durable retry identity across JSON-RPC request ids" do
+    first = identity.command_context(
+      request_id: "rpc-1",
+      tool_name: "openings.submit",
+      idempotency_key: "submission-123"
+    )
+    retry_context = identity.command_context(
+      request_id: "rpc-99",
+      tool_name: "openings.submit",
+      idempotency_key: "submission-123"
+    )
+
+    expect(retry_context.command_id).to eq(first.command_id)
+    expect(retry_context.idempotency_key).to eq(first.idempotency_key)
+  end
+
+  it "scopes request-id fallback identities to one runtime session" do
+    other_runtime = described_class.new(
+      workspace_id: identity.workspace_id,
+      principal: identity.principal,
+      credential: identity.credential,
+      actor: identity.actor,
+      executor: identity.executor,
+      client: identity.client,
+      capabilities: identity.capabilities,
+      runtime_id: "runtime-2"
+    )
+
+    first = identity.command_context(request_id: 42, tool_name: "openings.submit")
+    later_session = other_runtime.command_context(request_id: 42, tool_name: "openings.submit")
+
+    expect(later_session.command_id).not_to eq(first.command_id)
   end
 end
