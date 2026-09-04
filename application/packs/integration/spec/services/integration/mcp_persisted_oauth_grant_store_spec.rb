@@ -41,6 +41,40 @@ RSpec.describe Integration::Mcp::PersistedOauthGrantStore do
     expect(identity.runtime_id).to start_with("mcp-oauth:")
   end
 
+  it "rechecks current workspace membership policy for typed user principals" do
+    admin_user = create_user(name: "Runtime Admin", email: "runtime-admin@example.com")
+    recruiter_user = create_user(name: "Runtime Recruiter", email: "runtime-recruiter@example.com")
+    admin = Membership.create!(user: admin_user, organization: workspace, role: "workspace_admin")
+    recruiter = Membership.create!(user: recruiter_user, organization: workspace, role: "recruiter")
+    policy_claims = Integration::Mcp::OauthIntrospectionClient::Claims.new(
+      issuer: claims.issuer,
+      subject: "external-policy-user",
+      client_id: "policy-client",
+      scopes: %w[read:openings submit:openings],
+      audiences: claims.audiences,
+      expires_at: claims.expires_at
+    )
+
+    Integration::McpOauthGrantRegistry.create_membership_grant(
+      workspace_id: workspace.typed_id,
+      membership_id: recruiter.typed_id,
+      managed_by_membership_id: admin.typed_id,
+      issuer: policy_claims.issuer,
+      subject: policy_claims.subject,
+      client_id: policy_claims.client_id,
+      credential: "mcp-oauth:policy-user",
+      capabilities: %w[read:openings submit:openings]
+    )
+
+    identity = described_class.new.resolve(policy_claims)
+    expect(identity.principal).to eq(recruiter_user.typed_id)
+    expect(identity.capabilities).to eq(%w[read:openings submit:openings])
+
+    recruiter.update!(active: false)
+
+    expect(described_class.new.resolve(policy_claims)).to be_nil
+  end
+
   it "fails closed immediately after persisted revocation" do
     Integration::McpOauthGrantRegistry.revoke_grant(
       workspace_id: workspace.typed_id,
@@ -63,5 +97,14 @@ RSpec.describe Integration::Mcp::PersistedOauthGrantStore do
     )
 
     expect(described_class.new.resolve(different_claims)).to be_nil
+  end
+
+  def create_user(name:, email:)
+    User.create!(
+      name:,
+      email:,
+      password: "Password12345!",
+      verified: true
+    )
   end
 end
