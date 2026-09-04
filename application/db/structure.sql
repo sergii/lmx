@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict aCEdIkOFoW3AEkakubKTAAQk8vqe1NOGTvMEBscl4066JwfmLj8l4fYOQKu9Ds2
+\restrict mWjUolfvbbm2PqEXbqgIIrFVlAK2ktpixt5b4Xzt2meeVdZqU7ZDiJmmXCRSBXq
 
 -- Dumped from database version 18.4 (Debian 18.4-1.pgdg13+1)
 -- Dumped by pg_dump version 18.4 (Debian 18.4-1.pgdg13+1)
@@ -368,7 +368,7 @@ CREATE TABLE public.competency_assessments (
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
     CONSTRAINT competency_assessments_confidence_check CHECK (((confidence IS NULL) OR ((confidence >= (0)::numeric) AND (confidence <= (1)::numeric)))),
-    CONSTRAINT competency_assessments_status_check CHECK (((status)::text = ANY ((ARRAY['not_assessed'::character varying, 'insufficient_evidence'::character varying, 'weak'::character varying, 'demonstrated'::character varying])::text[])))
+    CONSTRAINT competency_assessments_status_check CHECK (((status)::text = ANY (ARRAY[('not_assessed'::character varying)::text, ('insufficient_evidence'::character varying)::text, ('weak'::character varying)::text, ('demonstrated'::character varying)::text])))
 );
 
 ALTER TABLE ONLY public.competency_assessments FORCE ROW LEVEL SECURITY;
@@ -389,7 +389,7 @@ CREATE TABLE public.evidences (
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
     CONSTRAINT evidences_confidence_check CHECK (((confidence IS NULL) OR ((confidence >= (0)::numeric) AND (confidence <= (1)::numeric)))),
-    CONSTRAINT evidences_source_type_check CHECK (((source_type)::text = ANY ((ARRAY['transcript'::character varying, 'interviewer_note'::character varying, 'resume'::character varying, 'live_coding'::character varying, 'take_home_assignment'::character varying])::text[])))
+    CONSTRAINT evidences_source_type_check CHECK (((source_type)::text = ANY (ARRAY[('transcript'::character varying)::text, ('interviewer_note'::character varying)::text, ('resume'::character varying)::text, ('live_coding'::character varying)::text, ('take_home_assignment'::character varying)::text])))
 );
 
 ALTER TABLE ONLY public.evidences FORCE ROW LEVEL SECURITY;
@@ -411,6 +411,48 @@ CREATE TABLE public.ingestion_records (
     parser_version character varying,
     idempotency_key character varying NOT NULL,
     provenance jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: integration_mcp_oauth_grant_events; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.integration_mcp_oauth_grant_events (
+    id uuid DEFAULT uuidv7() NOT NULL,
+    grant_id uuid NOT NULL,
+    organization_id uuid NOT NULL,
+    action character varying NOT NULL,
+    managed_by character varying NOT NULL,
+    reason text,
+    snapshot jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL
+);
+
+
+--
+-- Name: integration_mcp_oauth_grants; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.integration_mcp_oauth_grants (
+    id uuid DEFAULT uuidv7() NOT NULL,
+    organization_id uuid NOT NULL,
+    issuer character varying NOT NULL,
+    subject character varying NOT NULL,
+    client_id character varying NOT NULL,
+    principal character varying NOT NULL,
+    credential character varying NOT NULL,
+    actor character varying NOT NULL,
+    executor character varying NOT NULL,
+    client character varying NOT NULL,
+    capabilities jsonb DEFAULT '[]'::jsonb NOT NULL,
+    revoked_at timestamp(6) without time zone,
+    revoked_by character varying,
+    revoke_reason text,
+    created_by character varying NOT NULL,
+    lock_version integer DEFAULT 0 NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL
 );
@@ -471,7 +513,7 @@ CREATE TABLE public.interview_assessments (
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
     CONSTRAINT interview_assessments_rating_check CHECK (((rating IS NULL) OR ((rating >= 1) AND (rating <= 5)))),
-    CONSTRAINT interview_assessments_status_check CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'submitted'::character varying, 'reviewed'::character varying, 'approved'::character varying])::text[])))
+    CONSTRAINT interview_assessments_status_check CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('submitted'::character varying)::text, ('reviewed'::character varying)::text, ('approved'::character varying)::text])))
 );
 
 ALTER TABLE ONLY public.interview_assessments FORCE ROW LEVEL SECURITY;
@@ -497,7 +539,7 @@ CREATE TABLE public.interviews (
     completed_at timestamp(6) without time zone,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
-    CONSTRAINT interviews_status_check CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'completed'::character varying, 'cancelled'::character varying])::text[])))
+    CONSTRAINT interviews_status_check CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('completed'::character varying)::text, ('cancelled'::character varying)::text])))
 );
 
 ALTER TABLE ONLY public.interviews FORCE ROW LEVEL SECURITY;
@@ -668,7 +710,7 @@ CREATE TABLE public.market_catalog_posting_snapshots (
     metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     CONSTRAINT market_snapshots_content_digest_check CHECK (((content_digest)::text ~ '^[0-9a-f]{64}$'::text)),
-    CONSTRAINT market_snapshots_presence_state_check CHECK (((presence_state)::text = ANY ((ARRAY['present'::character varying, 'missing'::character varying, 'explicit_closed'::character varying, 'unknown'::character varying])::text[])))
+    CONSTRAINT market_snapshots_presence_state_check CHECK (((presence_state)::text = ANY (ARRAY[('present'::character varying)::text, ('missing'::character varying)::text, ('explicit_closed'::character varying)::text, ('unknown'::character varying)::text])))
 );
 
 
@@ -771,7 +813,7 @@ CREATE TABLE public.personal_crm_application_projections (
     stream_version integer NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL,
-    CONSTRAINT personal_crm_application_projection_stage_check CHECK (((stage)::text = ANY ((ARRAY['applying'::character varying, 'applied'::character varying, 'recruiter_contact'::character varying, 'screening'::character varying, 'interview'::character varying, 'offer'::character varying, 'rejected'::character varying, 'withdrawn'::character varying, 'archived'::character varying])::text[])))
+    CONSTRAINT personal_crm_application_projection_stage_check CHECK (((stage)::text = ANY (ARRAY[('applying'::character varying)::text, ('applied'::character varying)::text, ('recruiter_contact'::character varying)::text, ('screening'::character varying)::text, ('interview'::character varying)::text, ('offer'::character varying)::text, ('rejected'::character varying)::text, ('withdrawn'::character varying)::text, ('archived'::character varying)::text])))
 );
 
 ALTER TABLE ONLY public.personal_crm_application_projections FORCE ROW LEVEL SECURITY;
@@ -1231,6 +1273,22 @@ ALTER TABLE ONLY public.evidences
 
 ALTER TABLE ONLY public.ingestion_records
     ADD CONSTRAINT ingestion_records_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: integration_mcp_oauth_grant_events integration_mcp_oauth_grant_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.integration_mcp_oauth_grant_events
+    ADD CONSTRAINT integration_mcp_oauth_grant_events_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: integration_mcp_oauth_grants integration_mcp_oauth_grants_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.integration_mcp_oauth_grants
+    ADD CONSTRAINT integration_mcp_oauth_grants_pkey PRIMARY KEY (id);
 
 
 --
@@ -2026,6 +2084,34 @@ CREATE INDEX index_ingestion_records_on_source_run_id_and_ingested_at ON public.
 
 
 --
+-- Name: index_integration_mcp_oauth_grant_events_on_grant_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_integration_mcp_oauth_grant_events_on_grant_id ON public.integration_mcp_oauth_grant_events USING btree (grant_id);
+
+
+--
+-- Name: index_integration_mcp_oauth_grant_events_on_organization_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_integration_mcp_oauth_grant_events_on_organization_id ON public.integration_mcp_oauth_grant_events USING btree (organization_id);
+
+
+--
+-- Name: index_integration_mcp_oauth_grants_on_credential; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_integration_mcp_oauth_grants_on_credential ON public.integration_mcp_oauth_grants USING btree (credential);
+
+
+--
+-- Name: index_integration_mcp_oauth_grants_on_organization_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_integration_mcp_oauth_grants_on_organization_id ON public.integration_mcp_oauth_grants USING btree (organization_id);
+
+
+--
 -- Name: index_interview_assessments_on_assessor_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2184,6 +2270,34 @@ CREATE UNIQUE INDEX index_match_assessments_on_workspace_candidate_opening_versi
 --
 
 CREATE UNIQUE INDEX index_match_assessments_on_workspace_id ON public.intelligence_match_assessments USING btree (organization_id, id);
+
+
+--
+-- Name: index_mcp_oauth_grant_events_on_grant_and_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_mcp_oauth_grant_events_on_grant_and_created ON public.integration_mcp_oauth_grant_events USING btree (grant_id, created_at);
+
+
+--
+-- Name: index_mcp_oauth_grant_events_on_workspace_and_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_mcp_oauth_grant_events_on_workspace_and_created ON public.integration_mcp_oauth_grant_events USING btree (organization_id, created_at);
+
+
+--
+-- Name: index_mcp_oauth_grants_on_external_identity; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_mcp_oauth_grants_on_external_identity ON public.integration_mcp_oauth_grants USING btree (issuer, subject, client_id);
+
+
+--
+-- Name: index_mcp_oauth_grants_on_workspace_and_revocation; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_mcp_oauth_grants_on_workspace_and_revocation ON public.integration_mcp_oauth_grants USING btree (organization_id, revoked_at);
 
 
 --
@@ -2745,6 +2859,14 @@ ALTER TABLE ONLY public.evidences
 
 
 --
+-- Name: integration_mcp_oauth_grants fk_rails_2da97c7b5c; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.integration_mcp_oauth_grants
+    ADD CONSTRAINT fk_rails_2da97c7b5c FOREIGN KEY (organization_id) REFERENCES public.organizations(id);
+
+
+--
 -- Name: competency_assessment_evidences fk_rails_3357e6a30b; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2766,6 +2888,14 @@ ALTER TABLE ONLY public.platform_outbox_messages
 
 ALTER TABLE ONLY public.candidate_profile_versions
     ADD CONSTRAINT fk_rails_3a58eafdce FOREIGN KEY (organization_id) REFERENCES public.organizations(id);
+
+
+--
+-- Name: integration_mcp_oauth_grant_events fk_rails_3c917aef93; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.integration_mcp_oauth_grant_events
+    ADD CONSTRAINT fk_rails_3c917aef93 FOREIGN KEY (grant_id) REFERENCES public.integration_mcp_oauth_grants(id);
 
 
 --
@@ -3209,6 +3339,14 @@ ALTER TABLE ONLY public.market_catalog_resolution_decisions
 
 
 --
+-- Name: integration_mcp_oauth_grant_events fk_rails_eeb47aebb0; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.integration_mcp_oauth_grant_events
+    ADD CONSTRAINT fk_rails_eeb47aebb0 FOREIGN KEY (organization_id) REFERENCES public.organizations(id);
+
+
+--
 -- Name: sourcing_briefs fk_rails_f0535b0229; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3608,7 +3746,8 @@ ALTER TABLE public.workspace_invitations ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict aCEdIkOFoW3AEkakubKTAAQk8vqe1NOGTvMEBscl4066JwfmLj8l4fYOQKu9Ds2
+\unrestrict mWjUolfvbbm2PqEXbqgIIrFVlAK2ktpixt5b4Xzt2meeVdZqU7ZDiJmmXCRSBXq
+
 
 
 INSERT INTO public.schema_migrations (version) VALUES
@@ -3641,4 +3780,5 @@ INSERT INTO public.schema_migrations (version) VALUES
 ('20260902100000'),
 ('20260902185000'),
 ('20260902200000'),
-('20260904010000');
+('20260904010000'),
+('20260904210000');
