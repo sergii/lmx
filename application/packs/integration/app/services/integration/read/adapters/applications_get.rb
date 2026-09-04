@@ -7,20 +7,24 @@ module Integration
         CONTRACT_IDENTIFIER = "applications.get.v1"
         PROVENANCE = { adapter: "personal_crm.public_api" }.freeze
 
-        def initialize(application_api:, workspace_scope:, not_found_errors: [])
+        def initialize(application_api:, workspace_scope:, not_found_errors: [], invalid_input_errors: [])
           unless application_api.respond_to?(:fetch_application)
             raise Error::InvalidInput.new("application_api must respond to fetch_application")
           end
           unless workspace_scope.respond_to?(:call)
             raise Error::InvalidInput.new("workspace_scope must respond to call")
           end
-          unless valid_not_found_errors?(not_found_errors)
+          unless valid_error_classes?(not_found_errors)
             raise Error::InvalidInput.new("not_found_errors must contain StandardError subclasses")
+          end
+          unless valid_error_classes?(invalid_input_errors)
+            raise Error::InvalidInput.new("invalid_input_errors must contain StandardError subclasses")
           end
 
           @application_api = application_api
           @workspace_scope = workspace_scope
           @not_found_errors = not_found_errors.dup.freeze
+          @invalid_input_errors = invalid_input_errors.dup.freeze
           freeze
         end
 
@@ -28,14 +32,25 @@ module Integration
           ensure_contract!(query)
 
           data = @workspace_scope.call(query.context) do
-            @application_api.fetch_application(application_id: query.input.fetch(:id))
+            @application_api.fetch_application(
+              workspace_id: query.context.workspace_id,
+              application_id: query.input.fetch(:id)
+            )
           end
 
           Ports::Result.new(data:, provenance: PROVENANCE)
         rescue StandardError => error
-          raise unless not_found_error?(error)
+          if not_found_error?(error)
+            raise Error::NotFound.new(details: { contract: query.contract.identifier, id: query.input[:id] })
+          end
+          if invalid_input_error?(error)
+            raise Error::InvalidInput.new(
+              "Invalid application identifier",
+              details: { contract: query.contract.identifier, id: query.input[:id] }
+            )
+          end
 
-          raise Error::NotFound.new(details: { contract: query.contract.identifier, id: query.input[:id] })
+          raise
         end
 
         private
@@ -49,7 +64,7 @@ module Integration
           )
         end
 
-        def valid_not_found_errors?(errors)
+        def valid_error_classes?(errors)
           errors.is_a?(Array) && errors.all? do |error_class|
             error_class.is_a?(Class) && error_class < StandardError
           end
@@ -57,6 +72,10 @@ module Integration
 
         def not_found_error?(error)
           @not_found_errors.any? { |error_class| error.is_a?(error_class) }
+        end
+
+        def invalid_input_error?(error)
+          @invalid_input_errors.any? { |error_class| error.is_a?(error_class) }
         end
       end
     end

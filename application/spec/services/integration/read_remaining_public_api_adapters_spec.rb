@@ -110,17 +110,17 @@ RSpec.describe "Integration read public API adapters", type: :model do
     }
   end
 
-  it "passes an opaque application identifier to the Personal CRM public API seam" do
+  it "passes workspace and opaque application identifiers to the Personal CRM public API seam" do
     application_api = Class.new do
-      attr_reader :ids
+      attr_reader :requests
 
       def initialize
-        @ids = []
+        @requests = []
       end
 
-      def fetch_application(application_id:)
-        @ids << application_id
-        { id: application_id, stage: "applied" }
+      def fetch_application(workspace_id:, application_id:)
+        @requests << { workspace_id:, application_id: }
+        { id: application_id, workspace_id:, stage: "applied" }
       end
     end.new
     workspace_scope = workspace_scope_class.new
@@ -128,17 +128,23 @@ RSpec.describe "Integration read public API adapters", type: :model do
 
     result = adapter.call(read_query("applications.get", { id: "application_01opaque" }))
 
-    expect(application_api.ids).to eq([ "application_01opaque" ])
+    expect(application_api.requests).to eq(
+      [ { workspace_id: "workspace_opaque", application_id: "application_01opaque" } ]
+    )
     expect(workspace_scope.contexts).to eq([ context ])
-    expect(result.data).to eq(id: "application_01opaque", stage: "applied")
+    expect(result.data).to eq(
+      id: "application_01opaque",
+      workspace_id: "workspace_opaque",
+      stage: "applied"
+    )
     expect(result.provenance).to eq(adapter: "personal_crm.public_api")
   end
 
   it "maps configured application not-found errors and rejects contract reuse" do
     missing = Class.new(StandardError)
     application_api = Class.new do
-      define_method(:fetch_application) do |application_id:|
-        raise missing, application_id
+      define_method(:fetch_application) do |workspace_id:, application_id:|
+        raise missing, "#{workspace_id}:#{application_id}"
       end
     end.new
     adapter = Integration::Read::Adapters::ApplicationsGet.new(
@@ -154,5 +160,28 @@ RSpec.describe "Integration read public API adapters", type: :model do
     expect do
       adapter.call(read_query("openings.get", { id: "opening_opaque" }))
     end.to raise_error(Integration::Read::Error::Unsupported)
+  end
+
+  it "maps configured owning-package validation failures to Integration invalid_input" do
+    invalid = Class.new(StandardError)
+    application_api = Class.new do
+      define_method(:fetch_application) do |workspace_id:, application_id:|
+        raise invalid, "#{workspace_id}:#{application_id}"
+      end
+    end.new
+    adapter = Integration::Read::Adapters::ApplicationsGet.new(
+      application_api:,
+      workspace_scope: workspace_scope_class.new,
+      invalid_input_errors: [ invalid ]
+    )
+
+    expect do
+      adapter.call(read_query("applications.get", { id: "not-an-application-typeid" }))
+    end.to raise_error(Integration::Read::Error::InvalidInput) { |error|
+      expect(error.details).to eq(
+        contract: "applications.get.v1",
+        id: "not-an-application-typeid"
+      )
+    }
   end
 end

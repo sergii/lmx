@@ -21,7 +21,7 @@ Integration::Read::Ports::Query
 owning package public query implementation
 ```
 
-Typed IDs are treated as opaque public strings by the Integration protocol. Production composition declares explicit Packwerk dependencies only on bounded contexts whose public application APIs it calls: Workspace, Talent Profile, Market Catalog, and Intelligence. Integration does not parse those identifiers through another package's ActiveRecord models or call private constants.
+Typed IDs are treated as opaque public strings by the Integration protocol. Production composition declares explicit Packwerk dependencies only on bounded contexts whose public application APIs it calls: Workspace, Talent Profile, Market Catalog, Intelligence, and Personal CRM. Integration does not parse those identifiers through another package's ActiveRecord models or call private constants.
 
 ## Versioned v1 contracts
 
@@ -32,13 +32,15 @@ Typed IDs are treated as opaque public strings by the Integration protocol. Prod
 | `candidates.get.v1` | required opaque Candidate `id` | Candidate resource object |
 | `candidates.profile.v1` | required opaque Candidate `id` | latest canonical CandidateProfileVersion resource |
 | `matches.get.v1` | required opaque MatchAssessment `id` | versioned MatchAssessment resource from Intelligence |
-| `applications.get.v1` | required opaque `id` | extensible resource object |
+| `applications.get.v1` | required opaque ApplicationAttempt `id` | canonical application projection from Personal CRM |
 
 Resource fields remain owned by their bounded contexts. Integration validates the envelope shape but does not duplicate Market Catalog, Talent Profile, Intelligence, or Personal CRM domain schemas.
 
 `candidates.profile.v1` returns the latest canonical profile version for the requested Candidate. Exact historical profile-version lookup remains an owning Talent Profile API concern and can be exposed as a separate transport contract later if needed.
 
 `matches.get.v1` is deliberately a resource lookup by MatchAssessment ID. Ranked or top-match retrieval should be introduced later as a distinct collection/query contract rather than changing the meaning of this v1 operation.
+
+`applications.get.v1` resolves one stable `application_attempt` identifier through `PersonalCrm::Api.fetch_application`. Repeat attempts against the same Candidate and JobOpening remain independently addressable because Personal CRM owns attempt identity and projection semantics.
 
 ## Query context and provenance
 
@@ -149,18 +151,18 @@ MCP and HTTP adapters can map these codes to their own transport-specific error/
 
 Authentication is represented by `principal` plus a credential reference in the query context. Authorization is a separate port: `Integration::Read::Ports::Authorization`.
 
-Production-shaped composition resolves capabilities from a server-side credential source and checks the contract's required capability before routing the query. Candidate identity and profile reads both require `read:candidates`; `matches.get.v1` requires `read:matches`. Client tool arguments never grant capabilities.
+Production-shaped composition resolves capabilities from a server-side credential source and checks the contract's required capability before routing the query. Candidate identity and profile reads both require `read:candidates`; `matches.get.v1` requires `read:matches`; `applications.get.v1` requires `read:applications`. Client tool arguments never grant capabilities.
 
-The MCP composition now has both local stdio and authenticated stateless HTTP runtimes. Transport authentication resolves trusted workspace/principal/credential/capability evidence before the shared dispatcher is invoked; domain authorization remains inside the Integration boundary.
+The MCP composition has both local stdio and authenticated stateless HTTP runtimes. Transport authentication resolves trusted workspace/principal/credential/capability evidence before the shared dispatcher is invoked; domain authorization remains inside the Integration boundary.
 
 ## Intentionally not implemented here
 
 - direct ActiveRecord queries across bounded contexts
 - exact historical CandidateProfileVersion transport lookup
 - ranked/top MatchAssessment query semantics
-- canonical Personal CRM implementation for `applications.get`
-- MCP OAuth 2.1 / RFC 9728 discovery and token lifecycle
-- persisted agent credential issuance, rotation, revocation, and administration
+- persisted bootstrap bearer credential issuance/rotation and secret administration
+- a browser/admin UI or public HTTP API for OAuth grant administration
+- concrete Workspace/ActionPolicy-to-grant composition
 - MCP resources/prompts/subscriptions/tasks
 
 Those pieces can be plugged in later without changing the existing v1 tool/query names or the core query context/error semantics.

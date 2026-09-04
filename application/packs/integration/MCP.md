@@ -81,6 +81,7 @@ export LMX_MCP_HTTP_CREDENTIALS="[{
     \"read:openings\",
     \"read:candidates\",
     \"read:matches\",
+    \"read:applications\",
     \"submit:openings\",
     \"assess:matches\"
   ]
@@ -114,7 +115,7 @@ Configure the discovery document with:
 ```sh
 export LMX_MCP_OAUTH_RESOURCE="https://lmx.example.com/mcp"
 export LMX_MCP_OAUTH_AUTHORIZATION_SERVERS="https://auth.example.com"
-export LMX_MCP_OAUTH_SCOPES="read:openings read:candidates read:matches submit:openings assess:matches"
+export LMX_MCP_OAUTH_SCOPES="read:openings read:candidates read:matches read:applications submit:openings assess:matches"
 export LMX_MCP_OAUTH_RESOURCE_NAME="LMX MCP"
 ```
 
@@ -231,7 +232,7 @@ Current read tools:
 
 `candidates.profile` returns the latest canonical CandidateProfileVersion for the supplied Candidate ID through `TalentProfile::Api`. It uses the same `read:candidates` capability as candidate identity reads.
 
-`applications.get` is declared but remains intentionally unregistered until its canonical Personal CRM query adapter is complete. The other read tools above have production-shaped public-API adapters.
+`applications.get` returns the canonical Personal CRM application-attempt projection for the supplied ApplicationAttempt ID through `PersonalCrm::Api`. It requires `read:applications`, enters the trusted workspace scope before lookup, and preserves Personal CRM ownership of attempt identity, stage, next-action, and projection fields.
 
 ## Write tools
 
@@ -259,7 +260,7 @@ LMX_MCP_CREDENTIAL=credential:local-codex \
 LMX_MCP_ACTOR=human:serhii \
 LMX_MCP_EXECUTOR=agent:codex \
 LMX_MCP_CLIENT=codex \
-LMX_MCP_CAPABILITIES='read:openings read:candidates read:matches submit:openings assess:matches' \
+LMX_MCP_CAPABILITIES='read:openings read:candidates read:matches read:applications submit:openings assess:matches' \
 bundle exec ruby bin/lmx-mcp
 ```
 

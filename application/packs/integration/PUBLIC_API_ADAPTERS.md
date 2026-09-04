@@ -53,17 +53,15 @@ A future ranked/top-matches query should be a separate collection/query contract
 
 ## Application read adapter
 
-`Integration::Read::Adapters::ApplicationsGet` preserves the Integration-side contract expected from canonical Personal CRM:
+`Integration::Read::Adapters::ApplicationsGet` implements `applications.get.v1` through canonical Personal CRM:
 
 ```ruby
-fetch_application(application_id:)
+fetch_application(workspace_id:, application_id:)
 ```
 
-It is deliberately **not registered in the production read stack yet**.
+`application_id` is an opaque `application_attempt` TypeID. Integration does not query Personal CRM projections directly or interpret stage data. `PersonalCrm::Api` owns the projection snapshot and preserves the accepted event-stream semantics where the same Candidate may have multiple independent attempts against the same JobOpening.
 
-The donor application's legacy `Application` model represents a staffing workflow tied to legacy `Job`, including a permanent candidate/job uniqueness constraint and staffing-specific stages. Canonical LMX defines `Application` as an application attempt against a canonical `JobOpening`, optionally through a `JobPosting`, with repeat attempts allowed. Publishing the legacy model behind a new facade would freeze the wrong domain semantics.
-
-Canonical Personal CRM is Phase 1+ work. Until that bounded context owns the canonical model and public API, `applications.get.v1` remains a known contract with no registered implementation and returns stable `not_implemented`.
+The adapter first enters `Workspace::Api.with_workspace`, then passes the same workspace identifier to `PersonalCrm::Api.fetch_application`. Missing or cross-workspace application attempts are normalized from `PersonalCrm::Api::NotFound` to the Integration `not_found` outcome. Malformed application identifiers are normalized from `PersonalCrm::Api::InvalidInput` to the Integration `invalid_input` outcome. The contract requires `read:applications`.
 
 ## Workspace execution scope
 
@@ -95,16 +93,17 @@ By default it composes:
 - `TalentProfile::Api`
 - `MarketCatalog::Api`
 - `Intelligence::Api`
+- `PersonalCrm::Api`
 - an injected server-side credential source
 - `CredentialCapabilityResolver`
 - `CapabilityAuthorization`
 - `PublicApiWorkspaceScope`
-- opening, candidate, candidate-profile, and MatchAssessment query adapters
+- opening, candidate, candidate-profile, MatchAssessment, and application query adapters
 - `QueryRouter`
 - `Dispatcher`
 - `Integration::Mcp::ReadAdapter`
 
-The package therefore declares explicit dependencies on Workspace, Talent Profile, Market Catalog, and Intelligence. Cross-package references are limited to their public application APIs.
+The package therefore declares explicit dependencies on Workspace, Talent Profile, Market Catalog, Intelligence, and Personal CRM. Cross-package references are limited to their public application APIs.
 
 The public builder still accepts API objects as keyword arguments so tests or alternate compositions can substitute compatible implementations without changing query adapters.
 
@@ -141,16 +140,20 @@ QueryRouter
  |      +--> TalentProfile::Api
  |
  +--> matches.get
+ |      |
+ |      +--> Workspace::Api.with_workspace
+ |      |
+ |      +--> Intelligence::Api
+ |
+ +--> applications.get
         |
         +--> Workspace::Api.with_workspace
         |
-        +--> Intelligence::Api
+        +--> PersonalCrm::Api
 ```
 
-`applications.get` is intentionally absent from the router until canonical Personal CRM exists.
+## Error mapping
 
-## Not-found mapping
+The low-level read adapters normalize only configured owning-package failures. Unexpected exceptions are re-raised rather than being disguised as domain outcomes.
 
-The low-level adapters accept `not_found_errors:` and normalize only configured owning-package lookup failures to `Integration::Read::Error::NotFound`. Unexpected exceptions are re-raised.
-
-Concrete composition uses only public package errors: `Workspace::Api::NotFound`, `MarketCatalog::Api::NotFound`, `TalentProfile::Api::NotFound`, and `Intelligence::Api::NotFound`. ActiveRecord lookup exceptions do not cross owning-package application boundaries or appear in Integration composition.
+Concrete application composition maps `PersonalCrm::Api::NotFound` to `Integration::Read::Error::NotFound` and `PersonalCrm::Api::InvalidInput` to `Integration::Read::Error::InvalidInput`. Other concrete lookup adapters use their owning public `NotFound` errors. ActiveRecord lookup exceptions do not cross owning-package application boundaries or appear in Integration composition.

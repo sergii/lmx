@@ -2,6 +2,7 @@ enforce_dependencies: strict
 dependencies:
   - packs/intelligence
   - packs/market_catalog
+  - packs/personal_crm
   - packs/platform
   - packs/talent_profile
   - packs/workspace
