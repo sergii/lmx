@@ -16,8 +16,7 @@ module Integration
     OAUTH_VERIFIER_ENV = [
       OAUTH_INTROSPECTION_ENDPOINT_ENV,
       OAUTH_INTROSPECTION_CLIENT_ID_ENV,
-      OAUTH_INTROSPECTION_CLIENT_SECRET_ENV,
-      OAUTH_GRANTS_ENV
+      OAUTH_INTROSPECTION_CLIENT_SECRET_ENV
     ].freeze
 
     module_function
@@ -100,9 +99,13 @@ module Integration
       claims = client.verify(token)
       return unless claims
 
-      Mcp::OauthGrantStore.new(
-        serialized: fetch_environment(environment, OAUTH_GRANTS_ENV)
-      ).resolve(claims)
+      persisted = Mcp::PersistedOauthGrantStore.new.resolve(claims)
+      return persisted if persisted
+
+      legacy_grants = environment[OAUTH_GRANTS_ENV].to_s.strip
+      return if legacy_grants.empty?
+
+      Mcp::OauthGrantStore.new(serialized: legacy_grants).resolve(claims)
     end
     private_class_method :oauth_identity
 
