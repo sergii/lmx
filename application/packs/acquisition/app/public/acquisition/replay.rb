@@ -4,6 +4,8 @@ module Acquisition
   class Replay
     class UnsupportedSource < StandardError; end
     class ParseError < StandardError; end
+    class ObservationNotFound < StandardError; end
+    class MissingRawPayload < StandardError; end
 
     SUPPORTED_SOURCE_KEYS = %w[dou djinni work_ua robota_ua remoteok].freeze
     DEFAULT_STRATEGIES = {
@@ -19,17 +21,18 @@ module Acquisition
     ].freeze
 
     class << self
-      def call(source_key:, from: nil, to: nil, apply: false, limit: nil)
-        new(source_key:, from:, to:, apply:, limit:).call
+      def call(source_key:, from: nil, to: nil, apply: false, limit: nil, observation_ids: nil)
+        new(source_key:, from:, to:, apply:, limit:, observation_ids:).call
       end
     end
 
-    def initialize(source_key:, from:, to:, apply:, limit:)
+    def initialize(source_key:, from:, to:, apply:, limit:, observation_ids:)
       @source_key = source_key.to_s.strip.downcase
       @from = normalize_optional_time(from)
       @to = normalize_optional_time(to)
       @apply = ActiveModel::Type::Boolean.new.cast(apply)
       @limit = normalize_limit(limit)
+      @observation_ids = normalize_observation_ids(observation_ids)
 
       SourceRegistry.fetch(@source_key)
       raise UnsupportedSource, "Replay is not implemented for #{@source_key}" unless SUPPORTED_SOURCE_KEYS.include?(@source_key)
@@ -37,7 +40,8 @@ module Acquisition
     end
 
     def call
-      plans = raw_payload_scope.map { plan_raw_payload(_1) }
+      selection = evidence_selection
+      plans = selection.fetch(:raw_payloads).map { plan_raw_payload(_1) }
       persisted_count = apply ? persist!(plans) : 0
 
       deep_freeze(
@@ -47,6 +51,8 @@ module Acquisition
           from: from&.iso8601,
           to: to&.iso8601,
           limit:,
+          selection: selection.fetch(:public),
+          selected_observations: selection.fetch(:selected_observations),
           selected_raw_payloads: plans.size,
           summary: aggregate_counts(plans).merge(persisted: persisted_count),
           raw_payloads: plans.map { public_plan(_1) }
@@ -56,7 +62,47 @@ module Acquisition
 
     private
 
-    attr_reader :source_key, :from, :to, :apply, :limit
+    attr_reader :source_key, :from, :to, :apply, :limit, :observation_ids
+
+    def evidence_selection
+      return source_range_selection if observation_ids.empty?
+
+      observations = observation_ids.map { resolve_observation!(_1) }
+      raw_payloads = observations.map do |observation|
+        observation.raw_payload || raise(
+          MissingRawPayload,
+          "Source observation #{observation.typed_id} cannot be replayed because its raw payload is missing"
+        )
+      end.uniq
+
+      {
+        raw_payloads: apply_raw_payload_scope(raw_payloads),
+        selected_observations: observations.size,
+        public: {
+          mode: "observations",
+          observation_ids: observations.map(&:typed_id)
+        }
+      }
+    end
+
+    def source_range_selection
+      {
+        raw_payloads: raw_payload_scope.to_a,
+        selected_observations: nil,
+        public: { mode: "source_range" }
+      }
+    end
+
+    def resolve_observation!(typed_id)
+      observation = SourceObservation.find_by_typed_id(typed_id)
+      raise ObservationNotFound, "Source observation #{typed_id.inspect} was not found" unless observation
+      if observation.source_key != source_key
+        raise ArgumentError,
+          "Source observation #{typed_id} belongs to #{observation.source_key}, not #{source_key}"
+      end
+
+      observation
+    end
 
     def raw_payload_scope
       scope = RawPayload.where(source_run: SourceRun.where(source_key:)).order(:captured_at, :id)
@@ -64,6 +110,17 @@ module Acquisition
       scope = scope.where("captured_at <= ?", to) if to
       scope = scope.limit(limit) if limit
       scope.includes(:source_run, ingestion_records: :source_observations)
+    end
+
+    def apply_raw_payload_scope(raw_payloads)
+      selected = raw_payloads.sort_by { [ _1.captured_at, _1.id ] }
+      selected = selected.select { _1.captured_at >= from } if from
+      selected = selected.select { _1.captured_at <= to } if to
+      selected = selected.first(limit) if limit
+      RawPayload.where(id: selected.map(&:id))
+        .includes(:source_run, ingestion_records: :source_observations)
+        .index_by(&:id)
+        .then { |by_id| selected.filter_map { by_id[_1.id] } }
     end
 
     def plan_raw_payload(raw)
@@ -371,6 +428,14 @@ module Acquisition
       normalized
     rescue ArgumentError, TypeError
       raise ArgumentError, "limit must be a positive integer"
+    end
+
+    def normalize_observation_ids(value)
+      Array(value)
+        .flat_map { _1.to_s.split(",") }
+        .map(&:strip)
+        .reject(&:blank?)
+        .uniq
     end
 
     def canonicalize(value)

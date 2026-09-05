@@ -84,6 +84,7 @@ namespace :lmx do
         from: ENV["FROM"],
         to: ENV["TO"],
         limit: ENV["LIMIT"],
+        observation_ids: ENV["OBSERVATIONS"],
         apply: %w[1 true yes].include?(ENV["APPLY"].to_s.strip.downcase)
       )
 
