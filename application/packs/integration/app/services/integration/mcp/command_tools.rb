@@ -8,6 +8,11 @@ module Integration
         "openings.submit" => "Submit a URL-backed or no-URL opening through the canonical Market Catalog command path."
       }.freeze
 
+      TITLES = {
+        "matches.assess" => "Record match assessment",
+        "openings.submit" => "Submit opening"
+      }.freeze
+
       module_function
 
       def all
@@ -15,7 +20,14 @@ module Integration
           {
             name: contract.name,
             description: DESCRIPTIONS.fetch(contract.name),
-            inputSchema: contract.input_schema
+            inputSchema: contract.input_schema,
+            annotations: {
+              title: TITLES.fetch(contract.name),
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: false,
+              openWorldHint: false
+            }
           }.freeze
         end.freeze
       end
