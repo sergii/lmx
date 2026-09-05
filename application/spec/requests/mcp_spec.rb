@@ -150,12 +150,13 @@ RSpec.describe "MCP HTTP endpoint", type: :request do
     expect(response.parsed_body.dig("result", "supportedVersions")).to eq([ "2026-07-28" ])
   end
 
-  it "rejects a valid OAuth token that has no local issuer subject client grant" do
+  it "returns a short-lived pairing link for a new verified OAuth identity" do
     ENV.delete("LMX_MCP_HTTP_CREDENTIALS")
     configure_oauth_verifier
+    claims = oauth_claims(subject: "unmapped-user")
     verifier = instance_double(
       Integration::Mcp::OauthIntrospectionClient,
-      verify: oauth_claims(subject: "unmapped-user")
+      verify: claims
     )
     allow(Integration::Mcp::OauthIntrospectionClient).to receive(:new).and_return(verifier)
 
@@ -170,8 +171,23 @@ RSpec.describe "MCP HTTP endpoint", type: :request do
       params: JSON.generate(body),
       headers: mcp_headers(method: "server/discover", authorization: "Bearer oauth-token")
 
-    expect(response).to have_http_status(:unauthorized)
-    expect(response.parsed_body).to eq("error" => "unauthorized")
+    expect(response).to have_http_status(:forbidden)
+    expect(response.parsed_body.fetch("error")).to eq("mcp_pairing_required")
+    expect(response.headers["Cache-Control"]).to eq("no-store")
+
+    pairing_uri = URI.parse(response.parsed_body.fetch("pairing_url"))
+    expect(pairing_uri.origin).to eq("https://www.example.com")
+    expect(pairing_uri.path).to eq("/settings/agent-access/pair")
+    pairing_token = Rack::Utils.parse_nested_query(pairing_uri.query).fetch("pairing_token")
+    expect(pairing_token).not_to include("oauth-token")
+
+    ticket = Integration::McpOauthPairing.describe(
+      token: pairing_token,
+      resource: "https://www.example.com/mcp"
+    )
+    expect(ticket.subject).to eq("unmapped-user")
+    expect(ticket.client_id).to eq("chatgpt-client")
+    expect(ticket.scopes).to eq(%w[read:openings submit:openings])
   end
 
   it "returns service unavailable when the external OAuth verifier is unavailable" do
