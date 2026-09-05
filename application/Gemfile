@@ -25,6 +25,9 @@ gem "typelizer"
 gem "opentelemetry-api", "~> 1.11"
 gem "opentelemetry-sdk", "~> 1.13", require: false
 gem "opentelemetry-exporter-otlp", "~> 0.34.1", require: false
+gem "opentelemetry-metrics-api", "~> 0.7"
+gem "opentelemetry-metrics-sdk", "~> 0.17", require: false
+gem "opentelemetry-exporter-otlp-metrics", "~> 0.11", require: false
 
 group :development, :test do
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"

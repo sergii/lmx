@@ -6,6 +6,7 @@ module MarketCatalog
     ABSENCE_PRESENCE_STATES = %w[missing explicit_closed].freeze
     ACTIVE_LIFECYCLE_STATES = %w[present reappeared].freeze
     PROJECTION_METADATA_KEY = "lifecycle_projection"
+    RECONCILE_SPAN = "lmx.market_catalog.reconcile"
 
     class << self
       def call(posting_id:, policy: PostingLifecyclePolicy.from_env)
@@ -19,6 +20,31 @@ module MarketCatalog
     end
 
     def call
+      Platform::Telemetry.in_span(
+        RECONCILE_SPAN,
+        attributes: {
+          "lmx.posting.id" => posting.typed_id,
+          "lmx.source.id" => posting.source_key,
+          "lmx.lifecycle.policy_version" => policy.version
+        }
+      ) do |span|
+        previous_state = posting.lifecycle_state
+        reconcile
+        Platform::Telemetry.add_attributes(
+          span,
+          "lmx.lifecycle.previous_state" => previous_state,
+          "lmx.lifecycle.current_state" => posting.lifecycle_state,
+          "lmx.opening.id" => posting.job_opening&.typed_id
+        )
+        posting
+      end
+    end
+
+    private
+
+    attr_reader :posting, :policy
+
+    def reconcile
       reopen_event_at = nil
 
       posting.with_lock do
@@ -35,12 +61,7 @@ module MarketCatalog
 
       reconcile_opening
       emit_reopen_event(reopen_event_at) if reopen_event_at
-      posting
     end
-
-    private
-
-    attr_reader :posting, :policy
 
     def definitive_snapshots
       posting.snapshots

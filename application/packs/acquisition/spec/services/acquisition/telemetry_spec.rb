@@ -3,7 +3,12 @@
 require "rails_helper"
 
 RSpec.describe Acquisition::Telemetry do
-  it "emits the Phase 0 acquisition span contract without leaking the raw search" do
+  before do
+    allow(Platform::Telemetry).to receive(:increment)
+    allow(Platform::Telemetry).to receive(:record)
+  end
+
+  it "emits the Phase 0 acquisition span and metric contract without leaking the raw search" do
     spans = []
     result_type = Data.define(:source_run_id, :status, :fetched_count, :discovered_count, :observed_count)
     response_type = Data.define(:status)
@@ -52,7 +57,7 @@ RSpec.describe Acquisition::Telemetry do
         "lmx.acquisition.collect",
         "lmx.acquisition.fetch",
         "lmx.acquisition.parse",
-        "lmx.acquisition.observe"
+        "lmx.acquisition.persist_observation"
       ]
     )
 
@@ -83,7 +88,56 @@ RSpec.describe Acquisition::Telemetry do
       "lmx.source.discovered_count" => 2
     )
     expect(spans.fetch(3).fetch(:attributes)).to include("lmx.source.observed_count" => 2)
+
+    expect(Platform::Telemetry).to have_received(:increment).with(
+      "lmx.source.fetch.total",
+      description: "Source fetch attempts",
+      attributes: {
+        "lmx.source.id" => "dou",
+        "lmx.source.transport" => "rss",
+        "lmx.outcome" => "success"
+      }
+    )
+    expect(Platform::Telemetry).to have_received(:record).with(
+      "lmx.acquisition.duration",
+      kind_of(Numeric),
+      unit: "s",
+      description: "Acquisition collector duration",
+      attributes: {
+        "lmx.source.id" => "dou",
+        "lmx.source.transport" => "rss",
+        "lmx.outcome" => "success"
+      }
+    )
+
     expect(spans.inspect).not_to include("secret Ruby phrase")
     expect(spans.inspect).not_to include("?search=secret")
+  end
+
+  it "counts parser failures separately from successful zero-result parses" do
+    allow(Platform::Telemetry).to receive(:in_span) do |_name, attributes:, **, &block|
+      block.call(Struct.new(:attributes).new(attributes.dup))
+    end
+    allow(Platform::Telemetry).to receive(:add_attributes)
+
+    parser = double("parser")
+    allow(parser).to receive(:parse).and_raise(ArgumentError, "invalid feed")
+    proxy = described_class::ParserProxy.new(
+      parser,
+      source_key: "dou",
+      transport: "rss",
+      parser_version: "parser-v1"
+    )
+
+    expect { proxy.parse("payload") }.to raise_error(ArgumentError, "invalid feed")
+    expect(Platform::Telemetry).to have_received(:increment).with(
+      "lmx.parser.failure.total",
+      description: "Parser failures",
+      attributes: {
+        "lmx.source.id" => "dou",
+        "lmx.source.transport" => "rss",
+        "lmx.source.parser_version" => "parser-v1"
+      }
+    )
   end
 end

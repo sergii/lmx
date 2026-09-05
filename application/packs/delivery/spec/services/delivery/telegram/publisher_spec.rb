@@ -8,6 +8,8 @@ RSpec.describe Delivery::Telegram::Publisher do
   let(:posting_message) do
     {
       id: "outbox_01k00000000000000000000000",
+      message_type: Delivery::Telegram::Publisher::POSTING_MESSAGE_TYPE,
+      correlation_id: "trace-123",
       payload: {
         "event_type" => "JobPostingDiscovered",
         "change_kinds" => [ "new_posting" ],
@@ -20,6 +22,7 @@ RSpec.describe Delivery::Telegram::Publisher do
   let(:opportunity_message) do
     {
       id: "outbox_01k00000000000000000000001",
+      message_type: Delivery::Telegram::Publisher::OPPORTUNITY_MESSAGE_TYPE,
       payload: {
         "notification_kind" => "opportunity_assessed",
         "title" => "Senior Ruby Engineer",
@@ -30,7 +33,15 @@ RSpec.describe Delivery::Telegram::Publisher do
     }
   end
 
-  it "publishes claimed Telegram messages and marks them delivered" do
+  before do
+    allow(Platform::Telemetry).to receive(:in_span) do |_name, attributes:, **, &block|
+      block.call(Struct.new(:attributes).new(attributes.dup))
+    end
+    allow(Platform::Telemetry).to receive(:add_attributes)
+    allow(Platform::Telemetry).to receive(:increment)
+  end
+
+  it "publishes claimed Telegram messages and records correlated delivery telemetry" do
     allow(Platform::Reliability::OutboxClaims).to receive(:claim).and_return([ posting_message ])
     allow(client).to receive(:send_message).and_return(true)
     allow(Platform::Reliability::Api).to receive(:mark_outbox_published)
@@ -47,6 +58,20 @@ RSpec.describe Delivery::Telegram::Publisher do
     expect(Platform::Reliability::Api).to have_received(:mark_outbox_published).with(
       message_id: posting_message.fetch(:id),
       published_at: now
+    )
+    expect(Platform::Telemetry).to have_received(:in_span).with(
+      "lmx.delivery.notify",
+      attributes: hash_including(
+        "messaging.destination.name" => "telegram",
+        "lmx.message.type" => Delivery::Telegram::Publisher::POSTING_MESSAGE_TYPE,
+        "lmx.source.id" => "dou",
+        "lmx.correlation.id" => "trace-123"
+      )
+    )
+    expect(Platform::Telemetry).to have_received(:increment).with(
+      "lmx.notification.delivery.total",
+      description: "Telegram notification delivery outcomes",
+      attributes: hash_including("lmx.delivery.outcome" => "sent")
     )
   end
 
@@ -86,6 +111,11 @@ RSpec.describe Delivery::Telegram::Publisher do
       message_id: remote.fetch(:id),
       published_at: now
     )
+    expect(Platform::Telemetry).to have_received(:increment).with(
+      "lmx.notification.delivery.total",
+      description: "Telegram notification delivery outcomes",
+      attributes: hash_including("lmx.delivery.outcome" => "suppressed")
+    )
   end
 
   it "delivers candidate-aware opportunities at the configured threshold" do
@@ -118,7 +148,7 @@ RSpec.describe Delivery::Telegram::Publisher do
     )
   end
 
-  it "marks failed deliveries for retry without blocking the batch" do
+  it "marks failed deliveries for retry and records failure telemetry without blocking the batch" do
     allow(Platform::Reliability::OutboxClaims).to receive(:claim).and_return([ posting_message ])
     allow(client).to receive(:send_message).and_raise(Delivery::Telegram::Client::Error, "boom")
     allow(Platform::Reliability::Api).to receive(:mark_outbox_failed)
@@ -128,6 +158,11 @@ RSpec.describe Delivery::Telegram::Publisher do
       message_id: posting_message.fetch(:id),
       error: { "class" => "Delivery::Telegram::Client::Error", "message" => "boom" },
       retry_at: now + 1.minute
+    )
+    expect(Platform::Telemetry).to have_received(:increment).with(
+      "lmx.notification.delivery.total",
+      description: "Telegram notification delivery outcomes",
+      attributes: hash_including("lmx.delivery.outcome" => "failure")
     )
   end
 end

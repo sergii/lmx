@@ -17,6 +17,7 @@ module Platform
 
         Platform::OutboxMessage.transaction do
           messages = Platform::OutboxMessage
+            .includes(:domain_event)
             .where(organization_id:, message_type: types)
             .where(
               "(status IN (?) AND available_at <= ?) OR " \
@@ -60,7 +61,8 @@ module Platform
           message_type: message.message_type,
           destination: message.destination,
           payload: message.payload.deep_dup.freeze,
-          attempt_count: message.attempt_count
+          attempt_count: message.attempt_count,
+          correlation_id: message.domain_event.correlation_id
         }.freeze
       end
       private_class_method :snapshot
