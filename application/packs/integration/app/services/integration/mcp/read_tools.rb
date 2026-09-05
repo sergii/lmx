@@ -12,6 +12,15 @@ module Integration
         "applications.get" => "Retrieve one canonical application attempt by its opaque public identifier."
       }.freeze
 
+      TITLES = {
+        "openings.search" => "Search openings",
+        "openings.get" => "Get opening",
+        "candidates.get" => "Get candidate",
+        "candidates.profile" => "Get candidate profile",
+        "matches.get" => "Get match assessment",
+        "applications.get" => "Get application"
+      }.freeze
+
       module_function
 
       def all
@@ -19,7 +28,13 @@ module Integration
           {
             name: contract.name,
             description: DESCRIPTIONS.fetch(contract.name),
-            inputSchema: contract.input_schema
+            inputSchema: contract.input_schema,
+            annotations: {
+              title: TITLES.fetch(contract.name),
+              readOnlyHint: true,
+              destructiveHint: false,
+              openWorldHint: false
+            }
           }.freeze
         end.freeze
       end
