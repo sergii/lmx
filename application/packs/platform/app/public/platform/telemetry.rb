@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "opentelemetry-api"
+require "opentelemetry-metrics-api"
 
 module Platform
   module Telemetry
@@ -23,10 +24,31 @@ module Platform
         span
       end
 
+      def increment(name, by: 1, attributes: {}, unit: "1", description: nil)
+        meter
+          .create_counter(name, unit:, description:)
+          .add(by, attributes: compact_attributes(attributes))
+      end
+
+      def record(name, value, attributes: {}, unit: nil, description: nil)
+        meter
+          .create_histogram(name, unit:, description:)
+          .record(value, attributes: compact_attributes(attributes))
+      end
+
+      def current_trace_id
+        context = OpenTelemetry::Trace.current_span.context
+        context.hex_trace_id if context.valid?
+      end
+
       private
 
       def tracer
         OpenTelemetry.tracer_provider.tracer(INSTRUMENTATION_NAME, INSTRUMENTATION_VERSION)
+      end
+
+      def meter
+        OpenTelemetry.meter_provider.meter(INSTRUMENTATION_NAME, version: INSTRUMENTATION_VERSION)
       end
 
       def compact_attributes(attributes)
