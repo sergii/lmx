@@ -93,13 +93,13 @@ export default function PairMcpOauthAgent({
           <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2">
             <div>
               <dt className="text-muted-foreground text-xs">Issuer</dt>
-              <dd className="mt-1 break-all font-mono text-xs">
+              <dd className="mt-1 font-mono text-xs break-all">
                 {pairing.issuer}
               </dd>
             </div>
             <div>
               <dt className="text-muted-foreground text-xs">OAuth client</dt>
-              <dd className="mt-1 break-all font-mono text-xs">
+              <dd className="mt-1 font-mono text-xs break-all">
                 {pairing.client_id}
               </dd>
             </div>
@@ -107,13 +107,13 @@ export default function PairMcpOauthAgent({
               <dt className="text-muted-foreground text-xs">
                 External subject
               </dt>
-              <dd className="mt-1 break-all font-mono text-xs">
+              <dd className="mt-1 font-mono text-xs break-all">
                 {pairing.subject}
               </dd>
             </div>
             <div>
               <dt className="text-muted-foreground text-xs">MCP resource</dt>
-              <dd className="mt-1 break-all font-mono text-xs">
+              <dd className="mt-1 font-mono text-xs break-all">
                 {pairing.resource}
               </dd>
             </div>
@@ -124,7 +124,9 @@ export default function PairMcpOauthAgent({
           <div className="flex items-start gap-3">
             <ShieldCheck className="text-muted-foreground mt-0.5 size-5 shrink-0" />
             <div>
-              <h2 className="text-sm font-medium">Authorization is narrowing</h2>
+              <h2 className="text-sm font-medium">
+                Authorization is narrowing
+              </h2>
               <p className="text-muted-foreground mt-1 text-sm">
                 Approval cannot add privileges the verified token did not ask
                 for. Runtime access will still be intersected with this stored
