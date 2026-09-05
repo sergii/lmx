@@ -39,7 +39,7 @@ RSpec.describe Integration::Mcp::Server, "HTTP compatibility" do
   end
   let(:read_adapter) do
     OpenAiMcpRecordingAdapter.new(
-      [
+      tools: [
         {
           name: "openings.search",
           description: "Search openings",
@@ -51,7 +51,7 @@ RSpec.describe Integration::Mcp::Server, "HTTP compatibility" do
   end
   let(:command_adapter) do
     OpenAiMcpRecordingAdapter.new(
-      [
+      tools: [
         {
           name: "openings.submit",
           description: "Submit opening",
