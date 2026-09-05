@@ -43,9 +43,10 @@ module Delivery
 
         def publish(message, client:, now:, profile:, action_priority_threshold:, public_base_url:)
           payload = message.fetch(:payload)
-          attributes = telemetry_attributes(message, payload)
+          span_attributes = telemetry_attributes(message, payload)
+          metric_attributes = delivery_metric_attributes(message, payload)
 
-          Platform::Telemetry.in_span(NOTIFY_SPAN, attributes:) do |span|
+          Platform::Telemetry.in_span(NOTIFY_SPAN, attributes: span_attributes) do |span|
             delivered = NotificationPolicy.deliver?(payload, profile:, action_priority_threshold:)
             client.send_message(text: Formatter.call(payload, public_base_url:)) if delivered
 
@@ -55,10 +56,10 @@ module Delivery
               published_at: now
             )
             Platform::Telemetry.add_attributes(span, "lmx.delivery.outcome" => outcome)
-            record_delivery(outcome, attributes)
+            record_delivery(outcome, metric_attributes)
           end
         rescue StandardError => error
-          record_delivery("failure", attributes || {})
+          record_delivery("failure", metric_attributes || {})
           Platform::Reliability::Api.mark_outbox_failed(
             message_id: message.fetch(:id),
             error: { "class" => error.class.name, "message" => error.message },
@@ -67,12 +68,17 @@ module Delivery
         end
 
         def telemetry_attributes(message, payload)
+          delivery_metric_attributes(message, payload).merge(
+            "lmx.correlation.id" => message[:correlation_id]
+          ).compact
+        end
+
+        def delivery_metric_attributes(message, payload)
           {
             "messaging.destination.name" => "telegram",
             "lmx.message.type" => message[:message_type],
             "lmx.source.id" => payload["source_key"],
-            "lmx.notification.kind" => payload["notification_kind"],
-            "lmx.correlation.id" => message[:correlation_id]
+            "lmx.notification.kind" => payload["notification_kind"]
           }.compact
         end
 
