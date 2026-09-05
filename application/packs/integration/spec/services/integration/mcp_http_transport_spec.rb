@@ -105,7 +105,7 @@ RSpec.describe Integration::Mcp::HttpTransport do
     expect(server).not_to have_received(:call)
   end
 
-  it "returns unsupported-protocol-version when the HTTP protocol version is unknown" do
+  it "returns all supported protocol eras when the HTTP protocol version is unknown" do
     request = request_for(
       method: "tools/list",
       headers: { "HTTP_MCP_PROTOCOL_VERSION" => "2099-01-01" }
@@ -116,7 +116,64 @@ RSpec.describe Integration::Mcp::HttpTransport do
 
     expect(status).to eq(400)
     expect(payload.dig("error", "code")).to eq(Integration::Mcp::Server::UNSUPPORTED_PROTOCOL_VERSION)
-    expect(payload.dig("error", "data", "supported")).to eq([ "2026-07-28" ])
+    expect(payload.dig("error", "data", "supported")).to eq(Integration::Mcp::Server::SUPPORTED_PROTOCOL_VERSIONS)
+  end
+
+  it "accepts a legacy initialize request without modern HTTP headers" do
+    request = McpHttpRequestStub.new(
+      body: JSON.generate(
+        jsonrpc: "2.0",
+        id: "initialize-1",
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-11-25",
+          capabilities: {},
+          clientInfo: { name: "openai-mcp", version: "1.0.0" }
+        }
+      )
+    )
+
+    status, _headers, _body = transport.call(request)
+
+    expect(status).to eq(200)
+    expect(server).to have_received(:call).once
+  end
+
+  it "accepts legacy tool calls without modern method headers or modern metadata" do
+    request = McpHttpRequestStub.new(
+      body: JSON.generate(
+        jsonrpc: "2.0",
+        id: "legacy-call-1",
+        method: "tools/call",
+        params: {
+          name: "openings.search",
+          arguments: {},
+          _meta: { progressToken: "openai-signal" }
+        }
+      ),
+      headers: { "HTTP_MCP_PROTOCOL_VERSION" => "2025-11-25" }
+    )
+
+    status, _headers, _body = transport.call(request)
+
+    expect(status).to eq(200)
+    expect(server).to have_received(:call).once
+  end
+
+  it "treats a legacy request without a protocol header as the 2025-03-26 compatibility baseline" do
+    request = McpHttpRequestStub.new(
+      body: JSON.generate(
+        jsonrpc: "2.0",
+        id: "legacy-list-1",
+        method: "tools/list",
+        params: {}
+      )
+    )
+
+    status, _headers, _body = transport.call(request)
+
+    expect(status).to eq(200)
+    expect(server).to have_received(:call).once
   end
 
   it "rejects a browser origin that is not explicitly allow-listed" do
@@ -137,13 +194,53 @@ RSpec.describe Integration::Mcp::HttpTransport do
     expect(server).not_to have_received(:call)
   end
 
-  it "accepts a notification without the modern standard-header presence requirements and returns 202" do
+  it "requires modern standard headers on modern notifications" do
     notification = McpHttpRequestStub.new(
       body: JSON.generate(
         jsonrpc: "2.0",
         method: "notifications/initialized",
         params: { _meta: modern_meta }
       )
+    )
+
+    status, _headers, body = transport.call(notification)
+    payload = JSON.parse(body)
+
+    expect(status).to eq(400)
+    expect(payload.dig("error", "code")).to eq(Integration::Mcp::Server::HEADER_MISMATCH)
+    expect(payload.dig("error", "data", "header")).to eq("MCP-Protocol-Version")
+    expect(server).not_to have_received(:call)
+  end
+
+  it "accepts a fully headed modern notification and returns 202" do
+    notification = McpHttpRequestStub.new(
+      body: JSON.generate(
+        jsonrpc: "2.0",
+        method: "notifications/initialized",
+        params: { _meta: modern_meta }
+      ),
+      headers: {
+        "HTTP_MCP_PROTOCOL_VERSION" => Integration::Mcp::Server::MODERN_PROTOCOL_VERSION,
+        "HTTP_MCP_METHOD" => "notifications/initialized"
+      }
+    )
+    allow(server).to receive(:call).and_return(nil)
+
+    status, headers, body = transport.call(notification)
+
+    expect(status).to eq(202)
+    expect(headers).to eq("Cache-Control" => "no-store")
+    expect(body).to eq("")
+  end
+
+  it "accepts a legacy initialized notification without modern method headers" do
+    notification = McpHttpRequestStub.new(
+      body: JSON.generate(
+        jsonrpc: "2.0",
+        method: "notifications/initialized",
+        params: {}
+      ),
+      headers: { "HTTP_MCP_PROTOCOL_VERSION" => "2025-11-25" }
     )
     allow(server).to receive(:call).and_return(nil)
 
