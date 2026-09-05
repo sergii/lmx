@@ -7,6 +7,7 @@ module Platform
   module Telemetry
     INSTRUMENTATION_NAME = "lmx"
     INSTRUMENTATION_VERSION = "1"
+    INSTRUMENT_MUTEX = Mutex.new
 
     class NoopSpan
       def add_attributes(*)
@@ -47,8 +48,7 @@ module Platform
       end
 
       def increment(name, by: 1, attributes: {}, unit: "1", description: nil)
-        meter
-          .create_counter(name, unit:, description:)
+        metric_instrument(:counter, name, unit:, description:)
           .add(by, attributes: compact_attributes(attributes))
       rescue StandardError => error
         report_error(error, signal: "metric", name:)
@@ -56,8 +56,7 @@ module Platform
       end
 
       def record(name, value, attributes: {}, unit: nil, description: nil)
-        meter
-          .create_histogram(name, unit:, description:)
+        metric_instrument(:histogram, name, unit:, description:)
           .record(value, attributes: compact_attributes(attributes))
       rescue StandardError => error
         report_error(error, signal: "metric", name:)
@@ -78,8 +77,31 @@ module Platform
         OpenTelemetry.tracer_provider.tracer(INSTRUMENTATION_NAME, INSTRUMENTATION_VERSION)
       end
 
-      def meter
-        OpenTelemetry.meter_provider.meter(INSTRUMENTATION_NAME, version: INSTRUMENTATION_VERSION)
+      def metric_instrument(type, name, unit:, description:)
+        provider = OpenTelemetry.meter_provider
+        key = [ type, name, unit, description ].freeze
+
+        INSTRUMENT_MUTEX.synchronize do
+          reset_metric_cache(provider) unless @metric_provider.equal?(provider)
+          @metric_instruments[key] ||= create_metric_instrument(type, name, unit:, description:)
+        end
+      end
+
+      def reset_metric_cache(provider)
+        @metric_provider = provider
+        @metric_meter = provider.meter(INSTRUMENTATION_NAME, version: INSTRUMENTATION_VERSION)
+        @metric_instruments = {}
+      end
+
+      def create_metric_instrument(type, name, unit:, description:)
+        case type
+        when :counter
+          @metric_meter.create_counter(name, unit:, description:)
+        when :histogram
+          @metric_meter.create_histogram(name, unit:, description:)
+        else
+          raise ArgumentError, "unsupported metric instrument #{type.inspect}"
+        end
       end
 
       def compact_attributes(attributes)
