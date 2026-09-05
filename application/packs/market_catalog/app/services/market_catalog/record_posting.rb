@@ -4,6 +4,22 @@ module MarketCatalog
   class RecordPosting
     class IdentityConflict < StandardError; end
 
+    COMPENSATION_METADATA_KEYS = %w[
+      compensation
+      compensation_min
+      compensation_max
+      compensation_currency
+      salary
+      salary_min
+      salary_max
+      salary_currency
+      pay
+      pay_min
+      pay_max
+      pay_range
+      pay_currency
+    ].freeze
+
     class << self
       def call(source_key:, title:, observed_at:, external_id: nil, canonical_url: nil, application_url: nil,
         publisher_company_id: nil, source_published_at: nil, source_updated_at: nil,
@@ -48,9 +64,15 @@ module MarketCatalog
             current_observation = observed_at >= posting.last_confirmed_present_at
             before = material_state(posting)
             refresh_posting(posting)
+            after = material_state(posting)
 
-            if current_observation && material_state(posting) != before
-              EmitPostingEvent.call(posting:, event_type: "JobPostingUpdated", occurred_at: observed_at)
+            if current_observation && after != before
+              EmitPostingEvent.call(
+                posting:,
+                event_type: "JobPostingUpdated",
+                occurred_at: observed_at,
+                change_kinds: change_kinds(before, after)
+              )
             end
 
             posting
@@ -58,7 +80,12 @@ module MarketCatalog
         else
           posting, created = create_posting
           if created
-            EmitPostingEvent.call(posting:, event_type: "JobPostingDiscovered", occurred_at: observed_at)
+            EmitPostingEvent.call(
+              posting:,
+              event_type: "JobPostingDiscovered",
+              occurred_at: observed_at,
+              change_kinds: [ "new_posting" ]
+            )
           end
           posting
         end
@@ -143,15 +170,57 @@ module MarketCatalog
     end
 
     def material_state(posting)
-      [
-        posting.title,
-        posting.canonical_url,
-        posting.application_url,
-        posting.publisher_company_id,
-        posting.source_updated_at&.utc&.iso8601(6),
-        posting.description_fingerprint,
-        posting.lifecycle_state
-      ]
+      {
+        title: posting.title,
+        canonical_url: posting.canonical_url,
+        application_url: posting.application_url,
+        publisher_company_id: posting.publisher_company_id,
+        source_updated_at: posting.source_updated_at&.utc&.iso8601(6),
+        description_fingerprint: posting.description_fingerprint,
+        lifecycle_state: posting.lifecycle_state,
+        compensation: compensation_state(posting.metadata)
+      }.freeze
+    end
+
+    def change_kinds(before, after)
+      kinds = [ "material_posting_change" ]
+      kinds << "compensation_change" if before.fetch(:compensation) != after.fetch(:compensation)
+      if before.fetch(:lifecycle_state) != after.fetch(:lifecycle_state) && after.fetch(:lifecycle_state) == "reappeared"
+        kinds << "repost_or_reopen"
+      end
+      kinds.freeze
+    end
+
+    def compensation_state(value)
+      case value
+      when Hash
+        value.each_with_object({}) do |(key, nested), result|
+          key = key.to_s
+          if COMPENSATION_METADATA_KEYS.include?(key)
+            result[key] = canonicalize(nested)
+          else
+            extracted = compensation_state(nested)
+            result[key] = extracted if extracted.present?
+          end
+        end.freeze
+      when Array
+        value.map { compensation_state(_1) }.reject(&:blank?).freeze
+      else
+        {}.freeze
+      end
+    end
+
+    def canonicalize(value)
+      case value
+      when Hash
+        value.to_h.each_with_object({}) do |(key, nested), result|
+          result[key.to_s] = canonicalize(nested)
+        end.sort.to_h.freeze
+      when Array
+        value.map { canonicalize(_1) }.freeze
+      else
+        value
+      end
     end
 
     def validate_stable_identity!(posting)

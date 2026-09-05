@@ -10,6 +10,7 @@ RSpec.describe Delivery::Telegram::Publisher do
       id: "outbox_01k00000000000000000000000",
       payload: {
         "event_type" => "JobPostingDiscovered",
+        "change_kinds" => [ "new_posting" ],
         "title" => "Senior Ruby Engineer",
         "source_key" => "dou",
         "canonical_url" => "https://jobs.dou.ua/example"
@@ -45,6 +46,44 @@ RSpec.describe Delivery::Telegram::Publisher do
     )
     expect(Platform::Reliability::Api).to have_received(:mark_outbox_published).with(
       message_id: posting_message.fetch(:id),
+      published_at: now
+    )
+  end
+
+  it "uses the canonical LMX opening URL when public routing context is available" do
+    linked = posting_message.deep_dup
+    linked[:payload]["job_opening_id"] = "opening_01k00000000000000000000000"
+    allow(Platform::Reliability::OutboxClaims).to receive(:claim).and_return([ linked ])
+    allow(client).to receive(:send_message).and_return(true)
+    allow(Platform::Reliability::Api).to receive(:mark_outbox_published)
+
+    described_class.call(client:, now:, public_base_url: "https://lmx.example.test")
+
+    expect(client).to have_received(:send_message).with(
+      text: "🆕 Senior Ruby Engineer\nDOU\nhttps://lmx.example.test/openings/opening_01k00000000000000000000000"
+    )
+  end
+
+  it "terminally suppresses new postings outside profile-selected near-real-time lanes" do
+    remote = posting_message.deep_dup
+    remote[:payload]["source_key"] = "remoteok"
+    profile = {
+      "source_priorities" => {
+        "dou" => { "lane" => "local_fast" },
+        "remoteok" => { "lane" => "remote_specialized" }
+      },
+      "notification" => {
+        "prefer_near_real_time_for" => [ "new_local_fast_opportunity" ]
+      }
+    }
+    allow(Platform::Reliability::OutboxClaims).to receive(:claim).and_return([ remote ])
+    allow(client).to receive(:send_message)
+    allow(Platform::Reliability::Api).to receive(:mark_outbox_published)
+
+    expect(described_class.call(client:, now:, profile:)).to eq(1)
+    expect(client).not_to have_received(:send_message)
+    expect(Platform::Reliability::Api).to have_received(:mark_outbox_published).with(
+      message_id: remote.fetch(:id),
       published_at: now
     )
   end

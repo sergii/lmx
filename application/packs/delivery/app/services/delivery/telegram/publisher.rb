@@ -12,7 +12,9 @@ module Delivery
           client:,
           limit: 50,
           now: Time.current,
-          action_priority_threshold: NotificationPolicy::DEFAULT_ACTION_PRIORITY_THRESHOLD
+          profile: {},
+          action_priority_threshold: nil,
+          public_base_url: nil
         )
           messages = Platform::Reliability::OutboxClaims.claim(
             message_types: MESSAGE_TYPES,
@@ -21,7 +23,14 @@ module Delivery
           )
 
           messages.each do |message|
-            publish(message, client:, now:, action_priority_threshold:)
+            publish(
+              message,
+              client:,
+              now:,
+              profile:,
+              action_priority_threshold:,
+              public_base_url:
+            )
           end
 
           messages.size
@@ -29,10 +38,10 @@ module Delivery
 
         private
 
-        def publish(message, client:, now:, action_priority_threshold:)
+        def publish(message, client:, now:, profile:, action_priority_threshold:, public_base_url:)
           payload = message.fetch(:payload)
-          if NotificationPolicy.deliver?(payload, action_priority_threshold:)
-            client.send_message(text: Formatter.call(payload))
+          if NotificationPolicy.deliver?(payload, profile:, action_priority_threshold:)
+            client.send_message(text: Formatter.call(payload, public_base_url:))
           end
           Platform::Reliability::Api.mark_outbox_published(
             message_id: message.fetch(:id),

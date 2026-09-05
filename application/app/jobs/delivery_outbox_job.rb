@@ -9,11 +9,7 @@ class DeliveryOutboxJob < ApplicationJob
     required << "LMX_PHASE0_WORKSPACE_ID" unless explicit_workspace_id
     environment = Delivery::RuntimeRequirements.fetch!(*required)
     workspace_id = explicit_workspace_id || environment.fetch("LMX_PHASE0_WORKSPACE_ID")
-    notification = Lmx::Configuration.default_profile.fetch("notification", {})
-    action_priority_threshold = notification.fetch(
-      "action_priority_threshold",
-      Delivery::Telegram::NotificationPolicy::DEFAULT_ACTION_PRIORITY_THRESHOLD
-    )
+    profile = Lmx::Configuration.default_profile
 
     Workspace::Api.with_workspace(workspace_id:) do
       Delivery::Telegram::Publisher.call(
@@ -21,7 +17,8 @@ class DeliveryOutboxJob < ApplicationJob
           token: environment.fetch("TELEGRAM_BOT_TOKEN"),
           chat_id: environment.fetch("TELEGRAM_CHAT_ID")
         ),
-        action_priority_threshold:
+        profile:,
+        public_base_url: ENV["LMX_PUBLIC_BASE_URL"].to_s.strip.presence
       )
     end
   end

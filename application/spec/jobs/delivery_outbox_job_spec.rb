@@ -13,9 +13,13 @@ RSpec.describe DeliveryOutboxJob, type: :job do
   end
   let(:profile) do
     {
+      "source_priorities" => {
+        "dou" => { "lane" => "local_fast" }
+      },
       "notification" => {
         "primary_surface" => "telegram",
-        "action_priority_threshold" => 87
+        "action_priority_threshold" => 87,
+        "prefer_near_real_time_for" => [ "new_local_fast_opportunity" ]
       }
     }
   end
@@ -25,6 +29,8 @@ RSpec.describe DeliveryOutboxJob, type: :job do
     allow(Delivery::Telegram::Client).to receive(:new).and_return(client)
     allow(Delivery::Telegram::Publisher).to receive(:call).and_return(0)
     allow(Workspace::Api).to receive(:with_workspace).and_yield
+    allow(ENV).to receive(:[]).and_call_original
+    allow(ENV).to receive(:[]).with("LMX_PUBLIC_BASE_URL").and_return("https://lmx.example.test")
   end
 
   it "uses an explicit workspace without requiring the Phase 0 workspace fallback" do
@@ -37,7 +43,8 @@ RSpec.describe DeliveryOutboxJob, type: :job do
     expect(Workspace::Api).to have_received(:with_workspace).with(workspace_id:)
     expect(Delivery::Telegram::Publisher).to have_received(:call).with(
       client:,
-      action_priority_threshold: 87
+      profile:,
+      public_base_url: "https://lmx.example.test"
     )
   end
 
@@ -52,7 +59,8 @@ RSpec.describe DeliveryOutboxJob, type: :job do
     expect(Workspace::Api).to have_received(:with_workspace).with(workspace_id:)
     expect(Delivery::Telegram::Publisher).to have_received(:call).with(
       client:,
-      action_priority_threshold: 87
+      profile:,
+      public_base_url: "https://lmx.example.test"
     )
   end
 end
