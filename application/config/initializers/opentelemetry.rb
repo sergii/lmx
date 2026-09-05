@@ -24,15 +24,18 @@ if (traces_requested || metrics_requested) && !sdk_disabled
   end
 
   original_traces_exporter = ENV["OTEL_TRACES_EXPORTER"]
-  ENV["OTEL_TRACES_EXPORTER"] = "none" if !traces_requested && original_traces_exporter.blank?
 
-  OpenTelemetry::SDK.configure do |config|
-    config.service_name = ENV.fetch("OTEL_SERVICE_NAME", "lmx")
-  end
-ensure
-  if defined?(original_traces_exporter) && original_traces_exporter.nil?
-    ENV.delete("OTEL_TRACES_EXPORTER")
-  elsif defined?(original_traces_exporter)
-    ENV["OTEL_TRACES_EXPORTER"] = original_traces_exporter
+  begin
+    ENV["OTEL_TRACES_EXPORTER"] = "none" if !traces_requested && original_traces_exporter.blank?
+
+    OpenTelemetry::SDK.configure do |config|
+      config.service_name = ENV.fetch("OTEL_SERVICE_NAME", "lmx")
+    end
+  ensure
+    if original_traces_exporter.nil?
+      ENV.delete("OTEL_TRACES_EXPORTER")
+    else
+      ENV["OTEL_TRACES_EXPORTER"] = original_traces_exporter
+    end
   end
 end
