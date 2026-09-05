@@ -47,6 +47,20 @@ bin/rails lmx:phase0:check
 
 That command is read-only and is intended to be run against a configured staging or production environment after deployment.
 
+The initial local-source operational acceptance is intentionally separate because it performs real network fetches and persists new acquisition evidence. Run it on staging when validating DOU, Djinni, Work.ua, and Robota.ua:
+
+```bash
+bin/rails lmx:phase0:accept_sources
+```
+
+Select a subset when needed:
+
+```bash
+SOURCES=dou,djinni bin/rails lmx:phase0:accept_sources
+```
+
+The live acceptance exits non-zero unless every selected source creates a new successful SourceRun, persists at least one SourceObservation, and leaves replayable raw evidence. It should not be used as a CI test because it depends on external source availability and intentionally mutates acquisition history.
+
 Staging deployment and the production-mode database/RLS preparation sequence are documented in `../spec/development/staging-deployment.md`.
 
 ## Canonical provenance
