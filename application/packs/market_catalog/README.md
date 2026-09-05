@@ -29,6 +29,8 @@ A `PostingSnapshot` is an immutable normalized view of one source observation fo
 
 Repeated processing of the same source observation is idempotent when normalized content is identical. Different normalized output for the same observation is treated as a conflict rather than silently rewriting historical evidence.
 
+A failed collector/source run is not absence evidence. Acquisition records failure separately; Market Catalog only advances an absence sequence when it receives an explicit immutable `missing` posting snapshot from accepted source evidence.
+
 ## Lifecycle reconciliation
 
 Evidence capture and canonical lifecycle mutation are separate operations.
@@ -36,11 +38,25 @@ Evidence capture and canonical lifecycle mutation are separate operations.
 `MarketCatalog::ReconcilePostingLifecycle` recomputes the current posting state from immutable posting snapshots. It is deliberately replay-safe and conservative:
 
 - `unknown` evidence does not change canonical lifecycle;
-- one or more current `missing` observations produce `missing`, not `closed`;
-- `explicit_closed` evidence closes the posting even if later observations in the same absence run are merely `missing`;
-- a newer confirmed `present` observation clears absence state;
+- one missing observation never manufactures closure;
+- the default `v1` policy keeps the first two consecutive `missing` observations as `missing` and promotes the third to `probably_closed`;
+- inferred `closed` from repeated absence is disabled by default; explicit `explicit_closed` evidence closes immediately;
+- operators may explicitly configure an inferred-close threshold, which must be at least the `probably_closed` threshold;
+- a newer confirmed `present` observation clears the absence sequence;
 - the first confirmed presence after an absence projects `reappeared`, while a later continuous presence returns to `present`;
 - out-of-order older absence evidence cannot override a newer confirmed presence already recorded on the posting.
+
+The current projection records its policy snapshot under `JobPosting#metadata["lifecycle_projection"]`, including policy version, thresholds, consecutive missing observation count, and the latest evidence timestamp. This makes the current interpretation inspectable and allows a newer policy version to be introduced explicitly rather than silently changing semantics.
+
+The default policy can be configured with:
+
+```text
+LMX_POSTING_LIFECYCLE_POLICY_VERSION=v1
+LMX_POSTING_PROBABLY_CLOSED_AFTER_MISSES=3
+LMX_POSTING_CLOSED_AFTER_MISSES=
+```
+
+An empty `LMX_POSTING_CLOSED_AFTER_MISSES` keeps inferred closure disabled. Setting it to an integer enables inferred closure only after that many consecutive missing observations. Both thresholds must be at least 2 and the closed threshold cannot be lower than the probably-closed threshold.
 
 Reconciliation cascades to the linked `JobOpening`. An opening stays `open` while any linked posting is currently present, becomes `closed` only when all linked postings are closed, and otherwise remains conservatively `missing` or `probably_closed`. Reappearance on any linked posting can project the opening as `reopened`.
 
