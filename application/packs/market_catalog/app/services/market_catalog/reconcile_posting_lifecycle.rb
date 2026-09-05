@@ -19,14 +19,22 @@ module MarketCatalog
     end
 
     def call
+      reopen_event_at = nil
+
       posting.with_lock do
         snapshots = definitive_snapshots
         next if snapshots.empty?
 
+        previous_state = posting.lifecycle_state
         posting.update!(projected_attributes(snapshots))
+
+        if previous_state != posting.lifecycle_state && posting.lifecycle_state == "reappeared"
+          reopen_event_at = snapshots.first.observed_at
+        end
       end
 
       reconcile_opening
+      emit_reopen_event(reopen_event_at) if reopen_event_at
       posting
     end
 
@@ -102,6 +110,15 @@ module MarketCatalog
       return unless posting.job_opening_id
 
       ReconcileOpeningLifecycle.call(opening_id: posting.job_opening_id)
+    end
+
+    def emit_reopen_event(occurred_at)
+      EmitPostingEvent.call(
+        posting:,
+        event_type: "JobPostingLifecycleChanged",
+        occurred_at:,
+        change_kinds: [ "repost_or_reopen" ]
+      )
     end
 
     def find_record(klass, value, typed_prefix)

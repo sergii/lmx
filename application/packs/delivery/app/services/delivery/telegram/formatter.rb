@@ -5,22 +5,65 @@ module Delivery
     module Formatter
       module_function
 
-      def call(payload)
+      def call(payload, public_base_url: nil)
         return format_opportunity(payload) if payload["notification_kind"] == "opportunity_assessed"
 
-        format_posting(payload)
+        format_posting(payload, public_base_url:)
       end
 
-      def format_posting(payload)
-        event_type = payload.fetch("event_type")
-        marker = event_type == "JobPostingDiscovered" ? "🆕" : "✏️"
+      def format_posting(payload, public_base_url:)
+        kinds = posting_change_kinds(payload)
         title = payload.fetch("title")
         source = payload.fetch("source_key").to_s.upcase
-        url = payload["canonical_url"].presence || payload["application_url"].presence
 
-        [ "#{marker} #{title}", source, url ].compact.join("\n")
+        lines = [ "#{posting_marker(kinds)} #{title}" ]
+        label = posting_change_label(kinds)
+        lines << label if label
+        lines << source
+        lines << posting_url(payload, public_base_url:)
+        lines.compact.join("\n")
       end
       private_class_method :format_posting
+
+      def posting_marker(kinds)
+        return "♻️" if kinds.include?("repost_or_reopen")
+        return "💰" if kinds.include?("compensation_change")
+        return "🆕" if kinds.include?("new_posting")
+
+        "✏️"
+      end
+      private_class_method :posting_marker
+
+      def posting_change_label(kinds)
+        return "Reopened or reposted" if kinds.include?("repost_or_reopen")
+        return "Compensation changed" if kinds.include?("compensation_change")
+        return if kinds.include?("new_posting")
+
+        "Posting changed" if kinds.include?("material_posting_change")
+      end
+      private_class_method :posting_change_label
+
+      def posting_change_kinds(payload)
+        kinds = Array(payload["change_kinds"]).filter_map { _1.to_s.strip.presence }
+        return kinds if kinds.any?
+
+        case payload["event_type"]
+        when "JobPostingDiscovered"
+          [ "new_posting" ]
+        else
+          [ "material_posting_change" ]
+        end
+      end
+      private_class_method :posting_change_kinds
+
+      def posting_url(payload, public_base_url:)
+        opening_id = payload["job_opening_id"].to_s.strip.presence
+        base_url = public_base_url.to_s.strip.sub(%r{/+\z}, "").presence
+        return "#{base_url}/openings/#{opening_id}" if opening_id && base_url
+
+        payload["canonical_url"].presence || payload["application_url"].presence
+      end
+      private_class_method :posting_url
 
       def format_opportunity(payload)
         title = payload.fetch("title")

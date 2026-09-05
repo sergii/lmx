@@ -97,4 +97,41 @@ RSpec.describe MarketCatalog::RecordPosting, type: :model do
     expect(seen_again.lifecycle_state).to eq("reappeared")
     expect(seen_again.missing_since).to be_nil
   end
+
+  it "classifies compensation-only metadata changes as material compensation updates" do
+    posting = described_class.call(
+      **attributes.merge(metadata: { "salary_min" => 100_000, "salary_max" => 140_000 })
+    )
+    allow(MarketCatalog::EmitPostingEvent).to receive(:call)
+
+    described_class.call(
+      **attributes.merge(
+        observed_at: observed_at + 5.minutes,
+        metadata: { "salary_min" => 110_000, "salary_max" => 150_000 }
+      )
+    )
+
+    expect(posting.reload.metadata).to include("salary_min" => 110_000, "salary_max" => 150_000)
+    expect(MarketCatalog::EmitPostingEvent).to have_received(:call).with(
+      posting: posting,
+      event_type: "JobPostingUpdated",
+      occurred_at: observed_at + 5.minutes,
+      change_kinds: %w[material_posting_change compensation_change]
+    )
+  end
+
+  it "classifies confirmed reappearance as a repost-or-reopen change" do
+    posting = described_class.call(**attributes)
+    posting.update!(lifecycle_state: "probably_closed", missing_since: observed_at + 1.minute)
+    allow(MarketCatalog::EmitPostingEvent).to receive(:call)
+
+    described_class.call(**attributes.merge(observed_at: observed_at + 5.minutes))
+
+    expect(MarketCatalog::EmitPostingEvent).to have_received(:call).with(
+      posting: posting,
+      event_type: "JobPostingUpdated",
+      occurred_at: observed_at + 5.minutes,
+      change_kinds: %w[material_posting_change repost_or_reopen]
+    )
+  end
 end
