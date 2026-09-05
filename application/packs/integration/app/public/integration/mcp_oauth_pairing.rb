@@ -4,6 +4,7 @@ require "active_support/key_generator"
 require "active_support/message_encryptor"
 require "digest"
 require "json"
+require "time"
 require "uri"
 
 module Integration
@@ -70,7 +71,8 @@ module Integration
     rescue ActiveSupport::MessageEncryptor::InvalidMessage,
       JSON::ParserError,
       TypeError,
-      ArgumentError => error
+      ArgumentError,
+      InvalidInput => error
       raise InvalidTicket, "pairing ticket is invalid or expired: #{error.message}"
     end
 
