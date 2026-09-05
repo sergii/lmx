@@ -7,6 +7,7 @@ module Acquisition
     class IdempotencyConflict < StandardError; end
 
     SourceRunClosed = RecordRawPayload::SourceRunClosed
+    OBSERVATIONS_CREATED_TOTAL = "lmx.source.observation.created.total"
 
     class << self
       def call(
@@ -189,7 +190,16 @@ module Acquisition
     end
 
     def create_observation(raw, ingestion)
-      SourceObservation.create!(observation_attributes(raw, ingestion))
+      observation = SourceObservation.create!(observation_attributes(raw, ingestion))
+      Platform::Telemetry.increment(
+        OBSERVATIONS_CREATED_TOTAL,
+        description: "New immutable source observations",
+        attributes: {
+          "lmx.source.id" => source_run.source_key,
+          "lmx.source.transport" => source_run.transport
+        }
+      )
+      observation
     rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique => error
       observation = SourceObservation.find_by(idempotency_key: observation_idempotency_key(raw))
       return observation if observation && same_observation?(observation, raw)
