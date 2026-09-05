@@ -24,6 +24,30 @@ RSpec.describe Platform::Telemetry do
     expect(result).to eq([ :ok, :span ])
   end
 
+  it "falls back to a no-op span when tracing cannot start" do
+    allow(OpenTelemetry).to receive(:tracer_provider).and_raise(StandardError, "telemetry unavailable")
+    allow(OpenTelemetry.logger).to receive(:warn)
+
+    result = described_class.in_span("example") do |span|
+      span.add_attributes("safe" => true)
+      :application_result
+    end
+
+    expect(result).to eq(:application_result)
+  end
+
+  it "does not swallow application failures raised inside an active span" do
+    provider = double("tracer_provider")
+    tracer = double("tracer")
+    allow(OpenTelemetry).to receive(:tracer_provider).and_return(provider)
+    allow(provider).to receive(:tracer).and_return(tracer)
+    allow(tracer).to receive(:in_span).and_yield(:span)
+
+    expect do
+      described_class.in_span("example") { raise ArgumentError, "application failure" }
+    end.to raise_error(ArgumentError, "application failure")
+  end
+
   it "adds only non-nil attributes" do
     span = double("span")
 
@@ -52,6 +76,14 @@ RSpec.describe Platform::Telemetry do
       description: "Example counter",
       attributes: { outcome: "success", omitted: nil }
     )
+  end
+
+  it "fails open when metric recording is unavailable" do
+    allow(OpenTelemetry).to receive(:meter_provider).and_raise(StandardError, "metrics unavailable")
+    allow(OpenTelemetry.logger).to receive(:warn)
+
+    expect(described_class.increment("lmx.example.total")).to be_nil
+    expect(described_class.record("lmx.example.duration", 0.25)).to be_nil
   end
 
   it "records histograms through the global OpenTelemetry meter provider" do
