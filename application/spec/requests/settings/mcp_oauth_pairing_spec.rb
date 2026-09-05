@@ -126,16 +126,16 @@ RSpec.describe "MCP OAuth pairing", type: :request do
 
   it "prevents a pairing ticket from creating a second mapping" do
     sign_in admin_user
-    params = {
+    request_params = {
       pairing_token:,
       membership_id: recruiter.typed_id,
       capabilities: %w[read:openings]
     }
 
-    post settings_mcp_oauth_pairing_path, params:
+    post settings_mcp_oauth_pairing_path, params: request_params
     expect(response).to redirect_to(settings_agent_access_path)
 
-    post settings_mcp_oauth_pairing_path, params:
+    post settings_mcp_oauth_pairing_path, params: request_params
     expect(response).to redirect_to(settings_agent_access_path)
     expect(
       Integration::McpOauthGrantRegistry.list_grants(
