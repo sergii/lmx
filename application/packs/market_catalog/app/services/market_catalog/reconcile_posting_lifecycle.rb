@@ -5,15 +5,17 @@ module MarketCatalog
     DEFINITIVE_PRESENCE_STATES = %w[present missing explicit_closed].freeze
     ABSENCE_PRESENCE_STATES = %w[missing explicit_closed].freeze
     ACTIVE_LIFECYCLE_STATES = %w[present reappeared].freeze
+    PROJECTION_METADATA_KEY = "lifecycle_projection"
 
     class << self
-      def call(posting_id:)
-        new(posting_id:).call
+      def call(posting_id:, policy: PostingLifecyclePolicy.from_env)
+        new(posting_id:, policy:).call
       end
     end
 
-    def initialize(posting_id:)
+    def initialize(posting_id:, policy:)
       @posting = find_record(JobPosting, posting_id, "posting_")
+      @policy = policy
     end
 
     def call
@@ -30,7 +32,7 @@ module MarketCatalog
 
     private
 
-    attr_reader :posting
+    attr_reader :posting, :policy
 
     def definitive_snapshots
       posting.snapshots
@@ -46,7 +48,8 @@ module MarketCatalog
       {
         lifecycle_state: state,
         last_confirmed_present_at: [ posting.last_confirmed_present_at, latest_present_at ].compact.max,
-        missing_since: ACTIVE_LIFECYCLE_STATES.include?(state) ? nil : current_absence_started_at(snapshots)
+        missing_since: ACTIVE_LIFECYCLE_STATES.include?(state) ? nil : current_absence_started_at(snapshots),
+        metadata: projection_metadata(snapshots, state:)
       }
     end
 
@@ -61,21 +64,38 @@ module MarketCatalog
         return "present"
       end
 
-      current_absence = snapshots.take_while { ABSENCE_PRESENCE_STATES.include?(_1.presence_state) }
+      current_absence = current_absence_snapshots(snapshots)
       return "closed" if current_absence.any? { _1.presence_state == "explicit_closed" }
 
-      "missing"
+      policy.state_for_missing_count(current_absence.count)
+    end
+
+    def projection_metadata(snapshots, state:)
+      current_absence = current_absence_snapshots(snapshots)
+      consecutive_missing = if ACTIVE_LIFECYCLE_STATES.include?(state)
+        0
+      else
+        current_absence.count { _1.presence_state == "missing" }
+      end
+
+      posting.metadata.deep_dup.merge(
+        PROJECTION_METADATA_KEY => policy.snapshot.merge(
+          "consecutive_missing_observations" => consecutive_missing,
+          "latest_evidence_at" => snapshots.first.observed_at.iso8601(6)
+        )
+      )
     end
 
     def newer_unrepresented_presence?(latest_snapshot)
       posting.last_confirmed_present_at.present? && posting.last_confirmed_present_at > latest_snapshot.observed_at
     end
 
+    def current_absence_snapshots(snapshots)
+      snapshots.take_while { ABSENCE_PRESENCE_STATES.include?(_1.presence_state) }
+    end
+
     def current_absence_started_at(snapshots)
-      snapshots
-        .take_while { ABSENCE_PRESENCE_STATES.include?(_1.presence_state) }
-        .map(&:observed_at)
-        .min
+      current_absence_snapshots(snapshots).map(&:observed_at).min
     end
 
     def reconcile_opening

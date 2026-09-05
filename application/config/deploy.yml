@@ -30,6 +30,9 @@ env:
   clear:
     SOLID_QUEUE_IN_PUMA: true
     OTEL_SERVICE_NAME: lmx
+    LMX_POSTING_LIFECYCLE_POLICY_VERSION: <%= ENV.fetch("LMX_POSTING_LIFECYCLE_POLICY_VERSION", "v1") %>
+    LMX_POSTING_PROBABLY_CLOSED_AFTER_MISSES: <%= ENV.fetch("LMX_POSTING_PROBABLY_CLOSED_AFTER_MISSES", "3") %>
+    LMX_POSTING_CLOSED_AFTER_MISSES: <%= ENV.fetch("LMX_POSTING_CLOSED_AFTER_MISSES", "") %>
 
 aliases:
   console: app exec --interactive --reuse "bin/rails console"
