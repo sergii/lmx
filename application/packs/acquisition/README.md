@@ -51,6 +51,36 @@ Acquisition::SourceRuns.succeed(source_run:, observed_count: 0, ...)
 
 Failures use `Acquisition::SourceRuns.fail`. Start, completion, raw capture, ingestion, and observation recording are idempotent for the same identity. Reusing an idempotency identity with conflicting evidence raises an explicit conflict rather than silently rewriting history.
 
+## Historical replay and reprocessing
+
+`Acquisition::Replay` reapplies the current source parser to retained raw evidence without refetching the external source or rewriting historical observations. Dry-run is the default. It reports semantic `added`, `changed`, `unchanged`, and `removed` interpretations before any new evidence is appended.
+
+Replay can be scoped by source and capture time:
+
+```sh
+bin/rails lmx:acquisition:replay SOURCE=dou FROM=2026-09-01 TO=2026-09-05
+```
+
+or to exact immutable `SourceObservation` public IDs:
+
+```sh
+bin/rails lmx:acquisition:replay \
+  SOURCE=dou \
+  OBSERVATIONS=source_observation_01...,source_observation_01...
+```
+
+`FROM`, `TO`, and `LIMIT` remain additional raw-capture constraints for an exact-observation selection. Set `APPLY=true` only after reviewing the dry-run diff:
+
+```sh
+bin/rails lmx:acquisition:replay SOURCE=dou FROM=2026-09-01 TO=2026-09-05 APPLY=true
+```
+
+Applying replay creates new `IngestionRecord` / `SourceObservation` evidence with the current `parser_version`; older observations, parser versions, raw bytes, and evidence remain immutable. Repeating the same replay with the same parser is idempotent and appends nothing new.
+
+Replay deliberately stops at the Acquisition boundary. It never emits Market Catalog domain events itself. Downstream reconciliation consumes the resulting observations and is responsible for material-change detection and event idempotency, so an acquisition replay cannot directly duplicate accepted domain events.
+
+Every selected observation must still resolve to its retained raw payload. Exact-observation replay raises `Acquisition::Replay::MissingRawPayload` rather than silently skipping evidence when that invariant is broken, making legacy/corrupt evidence explicit before a large reprocessing run.
+
 ## DOU Phase 0 vertical slice
 
 `Acquisition::Dou.collect` is the first source-specific collector. The canonical DOU acquisition order is RSS first and ordinary public HTML second:
