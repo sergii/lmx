@@ -11,6 +11,13 @@ class McpController < ActionController::API
     response_headers.each { |name, value| response.set_header(name, value) }
     self.status = status
     self.response_body = body
+  rescue Integration::McpHttpRuntime::PairingRequired => error
+    response.set_header("Cache-Control", "no-store")
+    render json: {
+      error: "mcp_pairing_required",
+      pairing_url: error.pairing_url,
+      pairing_expires_at: error.expires_at.iso8601(6)
+    }, status: :forbidden
   rescue Integration::McpHttpRuntime::Unauthenticated
     unauthorized
   rescue Integration::McpHttpRuntime::AuthenticationUnavailable
