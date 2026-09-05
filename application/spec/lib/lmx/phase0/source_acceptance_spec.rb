@@ -132,10 +132,10 @@ RSpec.describe Lmx::Phase0::SourceAcceptance do
   end
 
   it "rejects inactive or unknown source keys before performing any network work" do
+    expect(runner).not_to receive(:call)
+
     expect do
       acceptance.call(source_keys: "dou,missing")
     end.to raise_error(ArgumentError, "inactive or unknown acquisition source(s): missing")
-
-    expect(runner).not_to have_received(:call)
   end
 end
