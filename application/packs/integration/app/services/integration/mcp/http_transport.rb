@@ -56,31 +56,61 @@ module Integration
       attr_reader :server, :allowed_hosts, :allowed_origins, :max_body_bytes
 
       def validate_standard_headers(request, message)
-        return unless message.is_a?(Hash) && (message.key?("id") || message.key?(:id))
+        return unless message.is_a?(Hash)
 
         body = stringify_keys(message)
-        request_id = body["id"]
         protocol_version = header(request, "HTTP_MCP_PROTOCOL_VERSION")
-        method = header(request, "HTTP_MCP_METHOD")
+
+        if modern_http_request?(body, protocol_version:)
+          validate_modern_headers(request, body, protocol_version:)
+        else
+          validate_legacy_headers(body, protocol_version:)
+        end
+      end
+
+      def modern_http_request?(body, protocol_version:)
         params = body["params"]
         meta = params.is_a?(Hash) ? params["_meta"] : nil
 
-        return header_mismatch(request_id, "MCP-Protocol-Version", Server::MODERN_PROTOCOL_VERSION, nil) if protocol_version.empty?
-        unless protocol_version == Server::MODERN_PROTOCOL_VERSION
-          return rpc_error(
+        body["method"] == "server/discover" ||
+          protocol_version == Server::MODERN_PROTOCOL_VERSION ||
+          (meta.is_a?(Hash) && meta.key?(Server::PROTOCOL_VERSION_META_KEY))
+      end
+
+      def validate_modern_headers(request, body, protocol_version:)
+        request_id = body["id"]
+        params = body["params"]
+        meta = params.is_a?(Hash) ? params["_meta"] : nil
+        body_version = meta.is_a?(Hash) ? meta[Server::PROTOCOL_VERSION_META_KEY] : nil
+
+        if protocol_version.empty?
+          return header_mismatch(
             request_id,
-            Server::UNSUPPORTED_PROTOCOL_VERSION,
-            "Unsupported protocol version",
-            supported: [ Server::MODERN_PROTOCOL_VERSION ],
-            requested: protocol_version
+            "MCP-Protocol-Version",
+            body_version || Server::MODERN_PROTOCOL_VERSION,
+            nil
           )
         end
 
-        body_version = meta.is_a?(Hash) ? meta[Server::PROTOCOL_VERSION_META_KEY] : nil
+        unless protocol_version == Server::MODERN_PROTOCOL_VERSION
+          if body_version.to_s == Server::MODERN_PROTOCOL_VERSION &&
+              Server::LEGACY_PROTOCOL_VERSIONS.include?(protocol_version)
+            return header_mismatch(
+              request_id,
+              "MCP-Protocol-Version",
+              body_version,
+              protocol_version
+            )
+          end
+
+          return unsupported_protocol_version(request_id, protocol_version)
+        end
+
         unless body_version.to_s == protocol_version
           return header_mismatch(request_id, "MCP-Protocol-Version", body_version, protocol_version)
         end
 
+        method = header(request, "HTTP_MCP_METHOD")
         body_method = body["method"]
         return header_mismatch(request_id, "Mcp-Method", body_method, nil) if method.empty?
         return header_mismatch(request_id, "Mcp-Method", body_method, method) unless method == body_method
@@ -93,6 +123,23 @@ module Integration
         return header_mismatch(request_id, "Mcp-Name", body_name, name) unless name == body_name
 
         nil
+      end
+
+      def validate_legacy_headers(body, protocol_version:)
+        return if protocol_version.empty?
+        return if Server::LEGACY_PROTOCOL_VERSIONS.include?(protocol_version)
+
+        unsupported_protocol_version(body["id"], protocol_version)
+      end
+
+      def unsupported_protocol_version(request_id, requested)
+        rpc_error(
+          request_id,
+          Server::UNSUPPORTED_PROTOCOL_VERSION,
+          "Unsupported protocol version",
+          supported: Server::SUPPORTED_PROTOCOL_VERSIONS,
+          requested:
+        )
       end
 
       def header_mismatch(request_id, header_name, expected, actual)

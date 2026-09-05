@@ -49,7 +49,8 @@ module Integration
         read_adapter: ReadStack.build(credential_source:),
         command_adapter: CommandStack.build(credential_source:),
         identity:,
-        require_explicit_write_idempotency: true
+        require_explicit_write_idempotency: true,
+        allow_stateless_legacy: true
       )
 
       Mcp::HttpTransport.new(

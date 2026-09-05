@@ -5,12 +5,14 @@ module Integration
     class Server
       MODERN_PROTOCOL_VERSION = "2026-07-28"
       LEGACY_PROTOCOL_VERSIONS = %w[2025-11-25 2025-06-18 2025-03-26].freeze
+      SUPPORTED_PROTOCOL_VERSIONS = [ MODERN_PROTOCOL_VERSION, *LEGACY_PROTOCOL_VERSIONS ].freeze
       SERVER_NAME = "lmx"
       SERVER_VERSION = "phase0"
       SERVER_INFO_META_KEY = "io.modelcontextprotocol/serverInfo"
       PROTOCOL_VERSION_META_KEY = "io.modelcontextprotocol/protocolVersion"
       CLIENT_CAPABILITIES_META_KEY = "io.modelcontextprotocol/clientCapabilities"
       IDEMPOTENCY_KEY_META_KEY = "com.lmx/idempotencyKey"
+      IDEMPOTENCY_KEY_ARGUMENT = "idempotencyKey"
 
       PARSE_ERROR = -32_700
       INVALID_REQUEST = -32_600
@@ -26,7 +28,8 @@ module Integration
         identity:,
         server_name: SERVER_NAME,
         server_version: SERVER_VERSION,
-        require_explicit_write_idempotency: false
+        require_explicit_write_idempotency: false,
+        allow_stateless_legacy: false
       )
         @read_adapter = read_adapter
         @command_adapter = command_adapter
@@ -34,6 +37,7 @@ module Integration
         @server_name = server_name.to_s.freeze
         @server_version = server_version.to_s.freeze
         @require_explicit_write_idempotency = require_explicit_write_idempotency
+        @allow_stateless_legacy = allow_stateless_legacy
         @era = nil
         @legacy_initialized = false
       end
@@ -100,7 +104,7 @@ module Integration
       end
 
       attr_reader :read_adapter, :command_adapter, :identity, :server_name, :server_version,
-        :require_explicit_write_idempotency
+        :require_explicit_write_idempotency, :allow_stateless_legacy
 
       def handle_notification(request)
         return nil unless request.fetch("method") == "notifications/initialized"
@@ -164,16 +168,16 @@ module Integration
 
         arguments = params.fetch("arguments", {})
         raise ArgumentError, "tool arguments must be an object" unless arguments.is_a?(Hash)
+        arguments = stringify_keys(arguments)
 
         meta = params.fetch("_meta", {})
         raise ArgumentError, "_meta must be an object" unless meta.is_a?(Hash)
 
-        idempotency_key = meta[IDEMPOTENCY_KEY_META_KEY]
-        if !idempotency_key.nil? && !idempotency_key.is_a?(String)
-          raise ArgumentError, "#{IDEMPOTENCY_KEY_META_KEY} must be a string"
-        end
-        if require_explicit_write_idempotency && command_tool_names.include?(name) && idempotency_key.to_s.strip.empty?
-          raise ArgumentError, "write tool requires #{IDEMPOTENCY_KEY_META_KEY}"
+        idempotency_key = command_idempotency_key(name:, arguments:, meta:)
+        sanitized_arguments = if command_tool_names.include?(name)
+          arguments.reject { |key, _value| key == IDEMPOTENCY_KEY_ARGUMENT }
+        else
+          arguments
         end
 
         adapter, context = adapter_and_context(
@@ -183,8 +187,36 @@ module Integration
         )
         raise ArgumentError, "unknown MCP tool: #{name}" unless adapter
 
-        result = stringify_keys(adapter.call(name:, arguments:, context:))
+        result = stringify_keys(adapter.call(name:, arguments: sanitized_arguments, context:))
         success_response(request.fetch("id"), result, modern:)
+      end
+
+      def command_idempotency_key(name:, arguments:, meta:)
+        return unless command_tool_names.include?(name)
+
+        meta_key = meta[IDEMPOTENCY_KEY_META_KEY]
+        argument_key = arguments[IDEMPOTENCY_KEY_ARGUMENT]
+
+        if !meta_key.nil? && !meta_key.is_a?(String)
+          raise ArgumentError, "#{IDEMPOTENCY_KEY_META_KEY} must be a string"
+        end
+        if !argument_key.nil? && !argument_key.is_a?(String)
+          raise ArgumentError, "#{IDEMPOTENCY_KEY_ARGUMENT} must be a string"
+        end
+
+        meta_key = meta_key&.strip
+        argument_key = argument_key&.strip
+        if meta_key && argument_key && !meta_key.empty? && !argument_key.empty? && meta_key != argument_key
+          raise ArgumentError, "MCP write idempotency keys must agree"
+        end
+
+        key = [ meta_key, argument_key ].find { !_1.to_s.empty? }
+        if require_explicit_write_idempotency && key.to_s.empty?
+          raise ArgumentError,
+            "write tool requires #{IDEMPOTENCY_KEY_ARGUMENT} or #{IDEMPOTENCY_KEY_META_KEY}"
+        end
+
+        key
       end
 
       def adapter_and_context(name:, request_id:, idempotency_key: nil)
@@ -200,8 +232,32 @@ module Integration
 
       def all_tools
         (read_adapter.tools + command_adapter.tools)
-          .map { stringify_keys(_1) }
+          .map { decorate_tool(stringify_keys(_1)) }
           .sort_by { _1.fetch("name") }
+      end
+
+      def decorate_tool(tool)
+        return tool unless require_explicit_write_idempotency
+        return tool unless command_tool_names.include?(tool.fetch("name"))
+
+        schema = stringify_keys(tool.fetch("inputSchema", {}))
+        properties = stringify_keys(schema.fetch("properties", {})).merge(
+          IDEMPOTENCY_KEY_ARGUMENT => {
+            "type" => "string",
+            "minLength" => 1,
+            "description" => "Stable key for one intended write. Reuse it when retrying the same write and use a new key for a distinct write."
+          }
+        )
+        required = Array(schema["required"]).map(&:to_s)
+        annotations = stringify_keys(tool.fetch("annotations", {})).merge("idempotentHint" => true)
+
+        tool.merge(
+          "inputSchema" => schema.merge(
+            "properties" => properties,
+            "required" => (required + [ IDEMPOTENCY_KEY_ARGUMENT ]).uniq
+          ),
+          "annotations" => annotations
+        )
       end
 
       def read_tool_names
@@ -251,6 +307,8 @@ module Integration
       end
 
       def ensure_legacy_ready!
+        return if allow_stateless_legacy
+
         raise EraConflict, "MCP legacy connection is not initialized" unless @legacy_initialized
       end
 
