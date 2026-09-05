@@ -31,4 +31,57 @@ RSpec.describe Platform::Telemetry do
 
     expect(described_class.add_attributes(span, count: 0, healthy: false, missing: nil)).to be(span)
   end
+
+  it "records counters through the global OpenTelemetry meter provider" do
+    provider = double("meter_provider")
+    meter = double("meter")
+    counter = double("counter")
+
+    allow(OpenTelemetry).to receive(:meter_provider).and_return(provider)
+    expect(provider).to receive(:meter).with("lmx", version: "1").and_return(meter)
+    expect(meter).to receive(:create_counter).with(
+      "lmx.example.total",
+      unit: "1",
+      description: "Example counter"
+    ).and_return(counter)
+    expect(counter).to receive(:add).with(2, attributes: { "outcome" => "success" })
+
+    described_class.increment(
+      "lmx.example.total",
+      by: 2,
+      description: "Example counter",
+      attributes: { outcome: "success", omitted: nil }
+    )
+  end
+
+  it "records histograms through the global OpenTelemetry meter provider" do
+    provider = double("meter_provider")
+    meter = double("meter")
+    histogram = double("histogram")
+
+    allow(OpenTelemetry).to receive(:meter_provider).and_return(provider)
+    expect(provider).to receive(:meter).with("lmx", version: "1").and_return(meter)
+    expect(meter).to receive(:create_histogram).with(
+      "lmx.example.duration",
+      unit: "s",
+      description: "Example duration"
+    ).and_return(histogram)
+    expect(histogram).to receive(:record).with(0.25, attributes: { "outcome" => "success" })
+
+    described_class.record(
+      "lmx.example.duration",
+      0.25,
+      unit: "s",
+      description: "Example duration",
+      attributes: { outcome: "success" }
+    )
+  end
+
+  it "exposes the current trace ID only for a valid span context" do
+    context = double("span_context", valid?: true, hex_trace_id: "0123456789abcdef")
+    span = double("span", context:)
+    allow(OpenTelemetry::Trace).to receive(:current_span).and_return(span)
+
+    expect(described_class.current_trace_id).to eq("0123456789abcdef")
+  end
 end
