@@ -23,8 +23,7 @@ RSpec.describe Platform::DomainEvent, type: :model do
   end
 
   it "traces committed appends, records a metric, and persists the trace as correlation ID" do
-    span = Struct.new(:attributes).new({})
-    allow(Platform::Telemetry).to receive(:in_span).and_yield(span)
+    allow(Platform::Telemetry).to receive(:in_span).and_yield
     allow(Platform::Telemetry).to receive(:current_trace_id).and_return("0123456789abcdef")
     allow(Platform::Telemetry).to receive(:increment)
 
