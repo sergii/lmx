@@ -77,7 +77,7 @@ class ApplicationController < ActionController::Base
   end
 
   def remember_post_authentication_return_path
-    return unless request.get?
+    return unless request.get? || request.head?
     return unless request.path == MCP_OAUTH_PAIRING_PATH
 
     session[POST_AUTHENTICATION_RETURN_PATH_KEY] = request.fullpath
