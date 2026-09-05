@@ -6,5 +6,11 @@ proxy:
   ssl: true
   host: <%= ENV.fetch("LMX_STAGING_HOSTNAME") %>
 
+env:
+  clear:
+    LMX_MCP_HTTP_ALLOWED_HOSTS: <%= ENV.fetch("LMX_STAGING_HOSTNAME") %>
+    LMX_MCP_OAUTH_RESOURCE: https://<%= ENV.fetch("LMX_STAGING_HOSTNAME") %>/mcp
+    LMX_MCP_OAUTH_RESOURCE_NAME: LMX MCP staging
+
 volumes:
   - "lmx_staging_storage:/rails/storage"

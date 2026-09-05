@@ -78,6 +78,11 @@ jobs:
       TELEGRAM_CHAT_ID: "1"
       OTEL_EXPORTER_OTLP_ENDPOINT: https://otel.invalid
       OTEL_EXPORTER_OTLP_HEADERS: authorization=ci
+      LMX_MCP_OAUTH_AUTHORIZATION_SERVERS: https://auth.invalid/issuer
+      LMX_MCP_OAUTH_SCOPES: read:openings,read:candidates,read:matches,read:applications,assess:matches,submit:openings
+      LMX_MCP_OAUTH_INTROSPECTION_ENDPOINT: https://auth.invalid/introspect
+      LMX_MCP_OAUTH_INTROSPECTION_CLIENT_ID: ci-lmx-mcp
+      LMX_MCP_OAUTH_INTROSPECTION_CLIENT_SECRET: ci-mcp-secret
     defaults:
       run:
         working-directory: application
