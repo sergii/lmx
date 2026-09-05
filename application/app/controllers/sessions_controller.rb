@@ -13,7 +13,16 @@ class SessionsController < InertiaController
       @session = user.sessions.create!
       cookies.signed.permanent[:session_token] = { value: @session.typed_id, httponly: true }
 
-      redirect_to(user.memberships.active.exists? ? organizations_path : onboarding_profile_path, notice: "Signed in successfully")
+      memberships = user.memberships.active
+      destination = if memberships.none?
+        onboarding_profile_path
+      elsif memberships.one? && pending_post_authentication_return_path
+        consume_post_authentication_return_path
+      else
+        organizations_path
+      end
+
+      redirect_to destination, notice: "Signed in successfully"
     else
       redirect_to sign_in_path, alert: "That email or password is incorrect"
     end

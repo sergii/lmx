@@ -11,11 +11,7 @@ module Integration
       end
 
       def resolve(claims)
-        grant = McpOauthGrant.active.includes(:organization).find_by(
-          issuer: claims.issuer,
-          subject: claims.subject,
-          client_id: claims.client_id
-        )
+        grant = find_active_grant(claims)
         return unless grant
 
         capabilities = grant.capabilities & claims.scopes
@@ -35,7 +31,23 @@ module Integration
         )
       end
 
+      def known_identity?(claims)
+        McpOauthGrant.exists?(
+          issuer: claims.issuer,
+          subject: claims.subject,
+          client_id: claims.client_id
+        )
+      end
+
       private
+
+      def find_active_grant(claims)
+        McpOauthGrant.active.includes(:organization).find_by(
+          issuer: claims.issuer,
+          subject: claims.subject,
+          client_id: claims.client_id
+        )
+      end
 
       def workspace_capabilities_for(grant)
         return unless user_principal?(grant.principal)

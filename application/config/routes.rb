@@ -57,6 +57,7 @@ Rails.application.routes.draw do
 
   namespace :settings do
     resource :agent_access, only: :show, controller: "agent_access"
+    resource :mcp_oauth_pairing, path: "agent-access/pair", only: %i[show create]
     resources :mcp_oauth_grants, path: "agent-access/grants", only: [] do
       member do
         patch :capabilities

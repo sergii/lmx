@@ -7,6 +7,6 @@ class OrganizationSelectionsController < InertiaController
     return redirect_to organizations_path, alert: "Organization access was not found" unless membership
 
     session[:organization_id] = membership.organization_id
-    redirect_to home_path
+    redirect_to consume_post_authentication_return_path || home_path
   end
 end

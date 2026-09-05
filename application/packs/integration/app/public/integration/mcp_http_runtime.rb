@@ -6,6 +6,16 @@ module Integration
     class Unauthenticated < StandardError; end
     class AuthenticationUnavailable < StandardError; end
 
+    class PairingRequired < StandardError
+      attr_reader :pairing_url, :expires_at
+
+      def initialize(pairing_url:, expires_at:)
+        @pairing_url = pairing_url
+        @expires_at = expires_at
+        super("verified OAuth identity requires local MCP pairing")
+      end
+    end
+
     CREDENTIALS_ENV = "LMX_MCP_HTTP_CREDENTIALS"
     ALLOWED_HOSTS_ENV = "LMX_MCP_HTTP_ALLOWED_HOSTS"
     ALLOWED_ORIGINS_ENV = "LMX_MCP_HTTP_ALLOWED_ORIGINS"
@@ -99,13 +109,35 @@ module Integration
       claims = client.verify(token)
       return unless claims
 
-      persisted = Mcp::PersistedOauthGrantStore.new.resolve(claims)
+      persisted_store = Mcp::PersistedOauthGrantStore.new
+      persisted = persisted_store.resolve(claims)
       return persisted if persisted
+      return if persisted_store.known_identity?(claims)
 
       legacy_grants = environment[OAUTH_GRANTS_ENV].to_s.strip
-      return if legacy_grants.empty?
+      unless legacy_grants.empty?
+        legacy_store = Mcp::OauthGrantStore.new(serialized: legacy_grants)
+        legacy = legacy_store.resolve(claims)
+        return legacy if legacy
+        return if legacy_store.known_identity?(claims)
+      end
 
-      Mcp::OauthGrantStore.new(serialized: legacy_grants).resolve(claims)
+      pairable = McpOauthPairing.pairable_capabilities(claims.scopes)
+      return if pairable.empty?
+
+      issued = McpOauthPairing.issue(
+        claims:,
+        resource: metadata.resource.to_s
+      )
+      raise PairingRequired.new(
+        pairing_url: McpOauthPairing.pairing_url(
+          token: issued.token,
+          resource: metadata.resource.to_s
+        ),
+        expires_at: issued.expires_at
+      )
+    rescue McpOauthPairing::InvalidInput
+      nil
     end
     private_class_method :oauth_identity
 

@@ -38,11 +38,7 @@ module Integration
       end
 
       def resolve(claims)
-        entry = entries.find do |candidate|
-          candidate.issuer == claims.issuer &&
-            candidate.subject == claims.subject &&
-            candidate.client_id == claims.client_id
-        end
+        entry = matching_entry(claims)
         return unless entry
 
         capabilities = entry.capabilities & claims.scopes
@@ -60,9 +56,21 @@ module Integration
         )
       end
 
+      def known_identity?(claims)
+        !matching_entry(claims).nil?
+      end
+
       private
 
       attr_reader :entries
+
+      def matching_entry(claims)
+        entries.find do |candidate|
+          candidate.issuer == claims.issuer &&
+            candidate.subject == claims.subject &&
+            candidate.client_id == claims.client_id
+        end
+      end
 
       def parse(serialized)
         unless serialized.is_a?(String)
