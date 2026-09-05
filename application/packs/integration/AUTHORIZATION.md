@@ -13,11 +13,11 @@ Integration authorization is capability-based at the agent-facing boundary. It d
 | `matches.assess.v1` | `assess:matches` |
 | `applications.get.v1` | `read:applications` |
 
-The required capability is metadata on the versioned Integration contract. Write capabilities are deliberately distinct from read capabilities; `read:openings` does not imply `submit:openings`, and `read:matches` does not imply `assess:matches`.
+The required capability is metadata on the versioned Integration contract. Write capabilities are deliberately distinct from read capabilities. `read:openings` does not imply `submit:openings`, and `read:matches` does not imply `assess:matches`.
 
 ## Trust boundary
 
-Capabilities are never accepted from MCP/HTTP/CLI request arguments or from client-supplied payloads.
+Capabilities are never accepted from MCP/HTTP/CLI request arguments or client-supplied payloads.
 
 ```text
 client request
@@ -39,51 +39,77 @@ workspace/principal/credential-bound capability evidence
 
 For reads, `Integration::Read::CredentialCapabilityResolver` constructs a `CapabilityGrant` from the server-side source and `CapabilityAuthorization` evaluates the contract capability. For commands, `Integration::Command::CapabilityAuthorization` applies the same fail-closed identity binding directly to the command context before any Workspace or Inbox work occurs.
 
-Both paths require returned authorization evidence to match the exact `workspace_id`, `principal`, and `credential` from the trusted context. An unknown, expired, or revoked credential resolves to `nil`; malformed or identity-mismatched evidence is a `contract_violation`, not an implicit grant.
+Both paths require returned authorization evidence to match the exact `workspace_id`, `principal`, and `credential` from trusted context. An unknown, expired, or revoked credential resolves to `nil`. Malformed or identity-mismatched evidence is a `contract_violation`, never an implicit grant.
 
-## Credential source boundary
+## Credential sources
 
 The credential source is intentionally server-side. MCP, HTTP, CLI, and agent clients never provide their own capability arrays. Sources can be backed by:
 
-- the trusted local stdio runtime identity
-- the HTTP bootstrap bearer credential store
+- trusted local stdio runtime identity
+- HTTP bootstrap bearer credentials
 - externally verified OAuth tokens plus persisted Integration-owned OAuth grants
 - service credentials with workspace-specific grants
-- a composition layer that intersects credential or token scope with Workspace authorization facts
+- composition that intersects credential or token scope with Workspace authorization facts
 
-The authorization contract does not depend on which persistence or authentication mechanism is selected.
+The authorization contract does not depend on which authentication mechanism produced the trusted identity.
 
-## Remote MCP authentication
+## Remote MCP OAuth authentication
 
-The HTTP MCP boundary supports two independent bearer-authentication sources.
+LMX is an OAuth protected resource, not an OAuth authorization server. It publishes RFC 9728 Protected Resource Metadata and validates externally issued access tokens with RFC 7662 token introspection against the configured authorization-server issuer.
 
-Bootstrap credentials are pre-shared high-entropy secrets configured server-side as SHA-256 digests. A successful lookup constructs `RuntimeIdentity`, and its credential source feeds the same capability authorization used by all other Integration ingress paths.
+An introspected token is usable only after all token checks pass, including active status, subject, client ID, non-empty scope, exact MCP resource audience, expiration when supplied, and issuer consistency when supplied.
 
-For externally issued OAuth access tokens, LMX uses RFC 7662 token introspection against a statically configured HTTPS endpoint associated with the single advertised authorization-server issuer. Active token status is not enough by itself. LMX additionally requires a resource audience containing the exact MCP resource identifier, a subject, a client ID, a non-empty scope string, and a matching active persisted `(issuer, subject, client_id)` grant. An `iss` value returned by introspection must agree with the configured issuer; omission is allowed because the introspection endpoint itself is issuer-bound.
+Persisted `integration_mcp_oauth_grants` records map the external identity tuple `(issuer, subject, client_id)` to trusted local `workspace_id`, principal, credential reference, actor/executor provenance, client label, and a maximum Integration capability set. No bearer token or OAuth client secret is stored in the grant table.
 
-`integration_mcp_oauth_grants` maps the external identity tuple to trusted local `workspace_id`, principal, credential reference, actor/executor provenance, client label, and maximum Integration capabilities. It stores no bearer token and no OAuth client secret. The external tuple and local credential reference are globally unique so one external identity cannot be ambiguously mapped to several workspaces.
-
-OAuth scopes are not a second independent authorization system. Effective capabilities are the intersection of verified token scopes, persisted server-side capabilities, and, for typed workspace users, current Workspace membership authorization:
+OAuth scopes are not a second independent authorization system. For a typed Workspace user, effective runtime access is:
 
 ```text
 verified OAuth token scopes
-          ∩
+          INTERSECTION
 persisted Integration capabilities
-          ∩
+          INTERSECTION
 current Workspace membership capabilities
           =
 RuntimeIdentity capabilities
 ```
 
-A broad OAuth token therefore cannot expand an LMX grant, and a broad stored grant cannot outlive a Workspace role reduction or membership deactivation for a typed user principal.
+A broad OAuth token cannot expand a stored LMX grant. A broad stored grant cannot bypass a narrow token. A stored user grant cannot outlive Workspace membership deactivation or role reduction.
 
-A token that is active at the external authorization server but has no active local identity grant is treated as unauthenticated. An introspection outage is surfaced as service unavailable rather than as an invalid-credential decision, avoiding accidental fail-open or misleading 401 responses.
+An introspection outage is surfaced as service unavailable rather than as an invalid-credential decision, avoiding accidental fail-open behavior.
+
+## First-contact OAuth pairing
+
+A valid externally issued OAuth token proves an external identity, but it does not by itself decide which LMX workspace user that identity may act as. LMX therefore has a local first-contact pairing step after OAuth verification.
+
+When an introspected token is valid and its `(issuer, subject, client_id)` tuple is completely unknown to both the persisted registry and the legacy migration mapping, LMX may return HTTP 403 with `mcp_pairing_required` and a short-lived browser pairing URL.
+
+The pairing ticket is encrypted and authenticated with the Rails application key. It contains only already-verified identity facts and scopes, never the OAuth bearer token. It is bound to the configured `LMX_MCP_OAUTH_RESOURCE` and expires no later than 15 minutes and no later than the verified access token expiration. The browser URL is derived from the configured MCP resource, not from the inbound Host header.
+
+A signed-in active `workspace_admin` opens the pairing page, selects the local Workspace member the external identity may act as, and explicitly selects a capability subset. Approval is narrowing only:
+
+```text
+verified pairable token scopes
+          INTERSECTION
+admin-selected capabilities
+          INTERSECTION
+current Workspace role maximum
+          =
+persisted user grant ceiling
+```
+
+Approval enters through `Integration::McpOauthPairing` and then `McpOauthGrantRegistry.create_membership_grant`, so the target membership, manager membership, Workspace policy, external identity uniqueness, and append-only audit event are all revalidated server-side.
+
+Pairing is only for a completely new external identity. If a persisted or legacy tuple is already known but is revoked, blocked by Workspace membership, or has no effective capability intersection, LMX remains unauthorized and does not issue a new pairing ticket. This prevents revocation or role reduction from being bypassed by simply pairing again.
+
+The pairing URL is preserved through LMX sign-in and, for users with multiple workspaces, workspace selection. Possession of the pairing URL alone grants nothing. A current authenticated `workspace_admin` must approve it before a local grant exists.
+
+This local pairing step is separate from OAuth authorization-server consent, token issuance, refresh tokens, and client registration. Those remain responsibilities of the configured OAuth authorization server.
 
 ## Workspace membership composition
 
 Workspace remains the owner of membership identity and role facts. `Workspace::Api.fetch_membership` and `fetch_membership_for_user` expose immutable authorization snapshots without exposing `Membership` ActiveRecord objects across the package boundary.
 
-`Integration::Mcp::WorkspaceGrantPolicy` translates those facts into the maximum capabilities that current workspace-wide MCP contracts may receive. The allowlist is explicit rather than derived automatically from the contract registry, so adding a new MCP capability never grants it to an existing role by accident.
+`Integration::Mcp::WorkspaceGrantPolicy` translates those facts into the maximum capabilities current workspace-wide MCP contracts may receive. The allowlist is explicit rather than generated automatically from the contract registry, so adding a new MCP capability never grants it to existing roles by accident.
 
 Current policy:
 
@@ -96,62 +122,56 @@ Current policy:
 | `client_hiring_manager` | none |
 | `client_interviewer` | none |
 
-The client roles are intentionally denied at this layer because the existing MCP contracts are workspace-wide while client authorization is resource/client-company scoped in ActionPolicy. Client MCP access should be introduced through client-scoped contracts that can preserve those record-level constraints rather than by granting broad workspace capabilities.
+Client roles are intentionally denied at this layer because existing MCP contracts are workspace-wide while client authorization is client-company and record scoped. Client MCP access should be introduced through client-scoped contracts that preserve those constraints rather than by granting broad workspace capabilities.
 
-Only an active `workspace_admin` may administer policy-bound persisted OAuth grants. `McpOauthGrantRegistry.create_membership_grant` derives the local principal and actor from the target membership, checks the requested subset against `WorkspaceGrantPolicy`, and records the managing membership in audit history. `update_membership_capabilities` repeats the manager and target checks before changing the stored maximum.
+Only an active `workspace_admin` may administer policy-bound persisted OAuth grants. `create_membership_grant` derives the local principal and actor from the target membership, checks the requested subset against `WorkspaceGrantPolicy`, and records the managing membership in audit history. Capability updates repeat the manager and target checks.
 
-`Mcp::PersistedOauthGrantStore` re-resolves current Workspace membership on every OAuth-authenticated request when the persisted principal is a typed `user` ID. Membership deactivation or a role change therefore takes effect without rewriting the grant or restarting the process.
+`Mcp::PersistedOauthGrantStore` re-resolves current Workspace membership on every OAuth-authenticated request for a typed `user` principal. Membership deactivation or role change therefore takes effect without rewriting the grant or restarting the process.
 
-The lower-level `create_grant` / `update_capabilities` operations remain available for trusted migration and non-user service-principal composition. A stored typed user principal is still constrained dynamically at runtime even if the record was created through that lower-level path.
+The lower-level `create_grant` and `update_capabilities` operations remain available for trusted migrations and non-user service principals. A typed user principal created through that path is still constrained dynamically at runtime.
 
 ## Persisted grant lifecycle and audit
 
-`Integration::McpOauthGrantRegistry` is the trusted application boundary for OAuth grant administration. It supports raw create/capability-update operations, policy-bound membership create/update operations, revoke, restore, list, and history. Management writes append immutable `integration_mcp_oauth_grant_events` snapshots.
+`Integration::McpOauthGrantRegistry` is the trusted application boundary for OAuth grant administration. It supports raw and membership-constrained creation and capability updates, revoke, restore, list, and history. Every management write appends an immutable `integration_mcp_oauth_grant_events` snapshot.
 
-Revocation is a local LMX authorization fact. `Mcp::PersistedOauthGrantStore` only resolves active records, so revoking a grant takes effect on the next OAuth-authenticated request without process restart or environment reload. Updating grant capabilities changes the stored maximum authorization envelope in the same way.
+Revocation is a local LMX authorization fact. `Mcp::PersistedOauthGrantStore` only resolves active records, so revoking a grant takes effect on the next OAuth-authenticated request without process restart or environment reload.
 
-The persisted grant registry is intentionally looked up before workspace context exists. Requiring organization RLS for this table would be circular because LMX learns the workspace from the verified external identity mapping itself. The table therefore acts as a pre-authentication identity registry rather than a recruiting-domain tenant table. Administration still resolves an explicit workspace with `Workspace::Api` and scopes every managed read or mutation to that organization. A foreign key keeps every grant attached to a real workspace.
+The persisted grant registry is intentionally looked up before Workspace context exists. Requiring organization RLS for the table would be circular because LMX learns the workspace from the verified external identity mapping itself. The table therefore acts as a pre-authentication identity registry rather than a recruiting-domain tenant table. Administration still resolves an explicit workspace through `Workspace::Api`, and a foreign key keeps every grant attached to a real workspace.
 
-`LMX_MCP_OAUTH_GRANTS` remains only as an optional migration fallback. Persisted active grants are authoritative when present; new production user grants should use the membership-constrained registry path instead of JSON environment configuration.
+`LMX_MCP_OAUTH_GRANTS` remains only as an optional migration fallback. Persisted active grants are authoritative when present. New production user grants should use the membership-constrained persisted path.
 
 ## Workspace admin control plane
 
-`GET /settings/agent-access` is the browser control plane for persisted MCP OAuth access. The route is hidden from non-admin workspace members and all mutations enter through `Integration::McpOauthGrantAdmin`, which rechecks the active `workspace_admin` membership before touching the registry.
+`GET /settings/agent-access` is the browser control plane for persisted MCP OAuth access. It is hidden from non-admin Workspace members, and all management mutations recheck the current active `workspace_admin` membership before touching the registry.
 
-The page keeps revoked grants visible and shows four distinct authorization layers rather than collapsing them into one permission list:
+The page keeps revoked grants visible and separates authorization into distinct layers:
 
-- token scopes - verified at request time and intentionally not persisted in the UI
-- stored grant capabilities - the local maximum recorded for the external identity
-- current Workspace maximum - recomputed from the target membership for typed user principals
-- effective ceiling - the current local intersection before request-time token scopes are applied
+- token scopes, verified at request time and intentionally not persisted in the UI
+- stored grant capabilities, the local maximum for the external identity
+- current Workspace maximum, recomputed from the target membership
+- effective local ceiling before request-time token scopes are applied
 
-For membership-bound grants, admins can narrow or expand the stored capability set only inside the current Workspace policy maximum. Revocation and restoration record the managing membership in the existing append-only grant audit history.
+For membership-bound grants, admins can narrow or expand the stored capability set only inside current Workspace policy. Revocation and restoration record the managing membership in the existing append-only history.
 
-Trusted service-principal grants are visible and revocable from the same control plane, but their capability ceiling is intentionally read-only there because they are not derived from a Workspace role. Creating or changing service-principal authorization remains a separate trusted composition concern.
+Trusted service-principal grants are visible and revocable from the same control plane, but their capability ceiling is intentionally read-only there because it is not derived from a Workspace role.
 
-The control plane does not create a new external OAuth identity. Provisioning or pairing an OAuth subject/client tuple is still separate from inspecting and governing grants that LMX already knows about.
-
-## Roles versus capabilities
-
-Workspace roles remain an authorization implementation concern and are not copied into versioned Integration contracts. The translation happens only at trusted server-side composition.
-
-Do not map every active Workspace membership directly to global Integration capabilities. Some roles are resource-scoped while agent-facing contracts may be workspace-scoped. `WorkspaceGrantPolicy` intentionally grants the existing broad tools only to the same internal membership class that current ActionPolicy rules treat as internal, and fails closed for client-scoped memberships.
+`GET /settings/agent-access/pair` is the first-contact approval surface for a short-lived verified pairing ticket. It creates a new membership-bound external identity mapping only after explicit admin approval.
 
 ## Write authorization and idempotency
 
-For `matches.assess.v1` and `openings.submit.v1`, authorization is evaluated before `Workspace::Api.with_workspace`, before Transactional Inbox receipt, and before the owning bounded-context command executes. A denied caller therefore creates no command record and no domain mutation.
+For `matches.assess.v1` and `openings.submit.v1`, authorization is evaluated before `Workspace::Api.with_workspace`, before Transactional Inbox receipt, and before the owning bounded-context command executes. A denied caller creates no command record and no domain mutation.
 
-After authorization, stable `message_id`, `command_id`, and `idempotency_key` values plus principal/credential and actor/executor provenance enter the Platform reliability boundary. Retrying the identical command reconstructs the prior result; reusing its identity with a different payload fails explicitly.
+After authorization, stable `message_id`, `command_id`, and `idempotency_key` values plus principal/credential and actor/executor provenance enter the Platform reliability boundary. Retrying the identical command reconstructs the prior result. Reusing its identity with a different payload fails explicitly.
 
-Tool discovery is not the security boundary. A client may know that `openings.submit` or `matches.assess` exists and still receive `unauthorized` when its server-resolved grant lacks the corresponding write capability.
+Tool discovery is not the security boundary. A client may know a write tool exists and still receive `unauthorized` when its server-resolved grant lacks the required capability.
 
 ## Still intentionally deferred
 
-- local JWT/JWKS verification as an alternative to online token introspection
+- local JWT/JWKS access-token verification as an alternative to online introspection
+- LMX-hosted OAuth authorization-server login, consent, token issuance, refresh-token, or client-registration responsibilities
 - persisted bootstrap bearer credential issuance, rotation, revocation, and secret verification
-- client-scoped MCP contracts that preserve client-company/record-level ActionPolicy constraints
-- OAuth pairing/consent flow for creating new external identities from the browser
+- client-scoped MCP contracts that preserve client-company/record-level authorization
 - a public HTTP API for capability administration
 - stricter identity-resolution capabilities
 
-These can be added behind the existing credential-source and authentication boundaries without changing the versioned read or command contracts.
+These can be added behind the existing authentication, pairing, credential-source, and authorization boundaries without changing the versioned read or command contracts.
