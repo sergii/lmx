@@ -82,23 +82,30 @@ module Platform
         key = [ type, name, unit, description ].freeze
 
         INSTRUMENT_MUTEX.synchronize do
-          reset_metric_cache(provider) unless @metric_provider.equal?(provider)
-          @metric_instruments[key] ||= create_metric_instrument(type, name, unit:, description:)
+          state = metric_states[provider] ||= {
+            meter: provider.meter(INSTRUMENTATION_NAME, version: INSTRUMENTATION_VERSION),
+            instruments: {}
+          }
+          state.fetch(:instruments)[key] ||= create_metric_instrument(
+            state.fetch(:meter),
+            type,
+            name,
+            unit:,
+            description:
+          )
         end
       end
 
-      def reset_metric_cache(provider)
-        @metric_provider = provider
-        @metric_meter = provider.meter(INSTRUMENTATION_NAME, version: INSTRUMENTATION_VERSION)
-        @metric_instruments = {}
+      def metric_states
+        @metric_states ||= {}.compare_by_identity
       end
 
-      def create_metric_instrument(type, name, unit:, description:)
+      def create_metric_instrument(meter, type, name, unit:, description:)
         case type
         when :counter
-          @metric_meter.create_counter(name, unit:, description:)
+          meter.create_counter(name, unit:, description:)
         when :histogram
-          @metric_meter.create_histogram(name, unit:, description:)
+          meter.create_histogram(name, unit:, description:)
         else
           raise ArgumentError, "unsupported metric instrument #{type.inspect}"
         end
