@@ -40,6 +40,7 @@ aliases:
   logs: app logs -f
   dbc: app exec --interactive --reuse "bin/rails dbconsole --include-password"
   phase0: app exec --primary --reuse "bin/rails lmx:phase0:check"
+  phase0-accept: app exec --primary --reuse "bin/rails lmx:phase0:accept_sources"
 
 asset_path: /rails/public
 

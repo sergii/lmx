@@ -1,0 +1,254 @@
+name: Deploy staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_acceptance:
+        description: "Run Phase 0 source/live readiness checks after deploy"
+        required: true
+        default: true
+        type: boolean
+  workflow_run:
+    workflows: [ CI ]
+    types: [ completed ]
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: staging-deploy
+  cancel-in-progress: false
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  TERRAFORM_VERSION: "1.16.1"
+  TF_ROOT: infra/terraform/environments/staging
+  TF_STATE_KEY: ${{ vars.TF_STATE_KEY || 'lmx/staging/terraform.tfstate' }}
+  TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+  TF_STATE_REGION: ${{ vars.TF_STATE_REGION }}
+  TF_STATE_ENDPOINT: ${{ vars.TF_STATE_ENDPOINT }}
+  TF_STATE_S3_COMPATIBLE: ${{ vars.TF_STATE_S3_COMPATIBLE || 'false' }}
+
+jobs:
+  deploy:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       vars.LMX_STAGING_AUTO_DEPLOY == 'true')
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.TF_STATE_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_STATE_SECRET_ACCESS_KEY }}
+      LMX_STAGING_SSH_PRIVATE_KEY: ${{ secrets.LMX_STAGING_SSH_PRIVATE_KEY }}
+      KAMAL_REGISTRY_USERNAME: ${{ github.actor }}
+      KAMAL_REGISTRY_PASSWORD: ${{ github.token }}
+      RAILS_MASTER_KEY: ${{ secrets.RAILS_MASTER_KEY }}
+      POSTGRES_OWNER_PASSWORD: ${{ secrets.POSTGRES_OWNER_PASSWORD }}
+      POSTGRES_RUNTIME_PASSWORD: ${{ secrets.POSTGRES_RUNTIME_PASSWORD }}
+      LMX_PHASE0_WORKSPACE_ID: ${{ secrets.LMX_PHASE0_WORKSPACE_ID }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
+      OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+      LMX_MCP_OAUTH_AUTHORIZATION_SERVERS: ${{ secrets.LMX_MCP_OAUTH_AUTHORIZATION_SERVERS }}
+      LMX_MCP_OAUTH_SCOPES: ${{ secrets.LMX_MCP_OAUTH_SCOPES }}
+      LMX_MCP_OAUTH_INTROSPECTION_ENDPOINT: ${{ secrets.LMX_MCP_OAUTH_INTROSPECTION_ENDPOINT }}
+      LMX_MCP_OAUTH_INTROSPECTION_CLIENT_ID: ${{ secrets.LMX_MCP_OAUTH_INTROSPECTION_CLIENT_ID }}
+      LMX_MCP_OAUTH_INTROSPECTION_CLIENT_SECRET: ${{ secrets.LMX_MCP_OAUTH_INTROSPECTION_CLIENT_SECRET }}
+
+    steps:
+      - name: Checkout deploy revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Check staging deployment configuration
+        shell: bash
+        run: |
+          required=(
+            TF_STATE_BUCKET
+            TF_STATE_REGION
+            AWS_ACCESS_KEY_ID
+            AWS_SECRET_ACCESS_KEY
+            LMX_STAGING_SSH_PRIVATE_KEY
+            RAILS_MASTER_KEY
+            POSTGRES_OWNER_PASSWORD
+            POSTGRES_RUNTIME_PASSWORD
+            LMX_PHASE0_WORKSPACE_ID
+            TELEGRAM_BOT_TOKEN
+            TELEGRAM_CHAT_ID
+            OTEL_EXPORTER_OTLP_ENDPOINT
+            LMX_MCP_OAUTH_AUTHORIZATION_SERVERS
+            LMX_MCP_OAUTH_SCOPES
+            LMX_MCP_OAUTH_INTROSPECTION_ENDPOINT
+            LMX_MCP_OAUTH_INTROSPECTION_CLIENT_ID
+            LMX_MCP_OAUTH_INTROSPECTION_CLIENT_SECRET
+          )
+          missing=()
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              missing+=("$name")
+            fi
+          done
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Missing staging deployment configuration: %s\n' "${missing[*]}" >&2
+            exit 1
+          fi
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        env:
+          BUNDLE_GEMFILE: ${{ github.workspace }}/application/Gemfile
+        with:
+          ruby-version: 4.0.1
+          bundler-cache: true
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - name: Read staging infrastructure outputs
+        shell: bash
+        run: |
+          infra/terraform/bin/write-backend-config "${TF_ROOT}/backend.ci.hcl"
+          terraform -chdir=${TF_ROOT} init -backend-config=backend.ci.hcl
+
+          host="$(terraform -chdir=${TF_ROOT} output -raw staging_ipv4)"
+          hostname="$(terraform -chdir=${TF_ROOT} output -raw staging_hostname)"
+          volume_path="$(terraform -chdir=${TF_ROOT} output -raw data_volume_mount_path)"
+
+          {
+            printf 'LMX_STAGING_HOST=%s\n' "$host"
+            printf 'LMX_STAGING_HOSTNAME=%s\n' "$hostname"
+            printf 'LMX_STAGING_DATA_VOLUME_PATH=%s\n' "$volume_path"
+          } >> "$GITHUB_ENV"
+
+          {
+            echo '## Staging target'
+            printf -- '- Host: `%s`\n' "$host"
+            printf -- '- Hostname: `%s`\n' "$hostname"
+            printf -- '- Persistent volume: `%s`\n' "$volume_path"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Configure staging SSH
+        shell: bash
+        run: |
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$LMX_STAGING_SSH_PRIVATE_KEY" > "$HOME/.ssh/id_lmx_staging"
+          chmod 0600 "$HOME/.ssh/id_lmx_staging"
+
+          scanned=false
+          for _ in $(seq 1 30); do
+            if ssh-keyscan -T 5 -H "$LMX_STAGING_HOST" >> "$HOME/.ssh/known_hosts" 2>/dev/null; then
+              scanned=true
+              break
+            fi
+            sleep 2
+          done
+          if [[ "$scanned" != "true" ]]; then
+            echo "Unable to obtain staging SSH host key" >&2
+            exit 1
+          fi
+
+          cat > "$HOME/.ssh/config" <<EOF
+          Host $LMX_STAGING_HOST
+            User root
+            IdentityFile $HOME/.ssh/id_lmx_staging
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            UserKnownHostsFile $HOME/.ssh/known_hosts
+          EOF
+          chmod 0600 "$HOME/.ssh/config"
+
+          ssh -o BatchMode=yes "$LMX_STAGING_HOST" true
+
+      - name: Derive database URLs
+        shell: bash
+        run: |
+          python3 <<'PY'
+          import os
+          from urllib.parse import quote
+
+          owner = quote(os.environ["POSTGRES_OWNER_PASSWORD"], safe="")
+          runtime = quote(os.environ["POSTGRES_RUNTIME_PASSWORD"], safe="")
+          databases = {
+              "DATABASE": "lmx_primary",
+              "CACHE_DATABASE": "lmx_cache",
+              "QUEUE_DATABASE": "lmx_queue",
+              "CABLE_DATABASE": "lmx_cable",
+          }
+
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
+              for prefix, database in databases.items():
+                  runtime_url = f"postgresql://lmx_app:{runtime}@lmx-staging-db:5432/{database}?sslmode=disable"
+                  migration_url = f"postgresql://lmx_owner:{owner}@127.0.0.1:15432/{database}?sslmode=disable"
+                  env_file.write(f"{prefix}_URL={runtime_url}\n")
+                  env_file.write(f"{prefix}_MIGRATION_URL={migration_url}\n")
+          PY
+
+      - name: Deploy application and prepare databases
+        shell: bash
+        env:
+          BUNDLE_GEMFILE: ${{ github.workspace }}/application/Gemfile
+        run: |
+          ssh -NT \
+            -o BatchMode=yes \
+            -o ExitOnForwardFailure=yes \
+            -L 15432:127.0.0.1:5432 \
+            "$LMX_STAGING_HOST" &
+          tunnel_pid=$!
+          trap 'kill "$tunnel_pid" >/dev/null 2>&1 || true' EXIT
+
+          cd application
+          ./bin/deploy-staging
+
+      - name: Verify HTTP health
+        shell: bash
+        run: |
+          curl \
+            --fail-with-body \
+            --show-error \
+            --silent \
+            --retry 10 \
+            --retry-all-errors \
+            --retry-delay 3 \
+            "https://${LMX_STAGING_HOSTNAME}/up"
+
+      - name: Verify MCP protected-resource metadata
+        shell: bash
+        run: |
+          curl \
+            --fail-with-body \
+            --show-error \
+            --silent \
+            "https://${LMX_STAGING_HOSTNAME}/.well-known/oauth-protected-resource/mcp" \
+            | EXPECTED_RESOURCE="https://${LMX_STAGING_HOSTNAME}/mcp" python3 -c '
+          import json, os, sys
+          payload = json.load(sys.stdin)
+          expected = os.environ["EXPECTED_RESOURCE"]
+          actual = payload.get("resource")
+          if actual != expected:
+              raise SystemExit(f"unexpected MCP resource: {actual!r}, expected {expected!r}")
+          '
+
+      - name: Run Phase 0 source acceptance
+        if: github.event_name != 'workflow_dispatch' || inputs.run_acceptance
+        working-directory: application
+        env:
+          BUNDLE_GEMFILE: ${{ github.workspace }}/application/Gemfile
+        run: bin/kamal phase0-accept -d staging
+
+      - name: Run Phase 0 readiness gate
+        if: github.event_name != 'workflow_dispatch' || inputs.run_acceptance
+        working-directory: application
+        env:
+          BUNDLE_GEMFILE: ${{ github.workspace }}/application/Gemfile
+        run: bin/kamal phase0 -d staging

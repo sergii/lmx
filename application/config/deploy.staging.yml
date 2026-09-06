@@ -21,6 +21,7 @@ accessories:
     service: lmx-staging-db
     image: postgres:18.4
     host: <%= ENV.fetch("LMX_STAGING_HOST") %>
+    network: kamal
     port: "127.0.0.1:5432:5432"
     env:
       clear:

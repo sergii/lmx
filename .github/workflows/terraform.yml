@@ -149,7 +149,7 @@ jobs:
       inputs.action == 'apply'
     needs: validate
     runs-on: ubuntu-latest
-    environment: staging
+    environment: staging-infra
     env:
       HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
       AWS_ACCESS_KEY_ID: ${{ secrets.TF_STATE_ACCESS_KEY_ID }}
