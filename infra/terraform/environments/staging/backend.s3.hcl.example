@@ -1,11 +1,21 @@
 # Copy to backend.hcl and replace every placeholder.
-# The concrete S3-compatible provider is intentionally not hard-coded here.
+# Keep access credentials outside this file and pass them through
+# AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY or equivalent environment variables.
 
-bucket = "REPLACE_ME"
-key    = "lmx/staging/terraform.tfstate"
-region = "REPLACE_ME"
+bucket       = "REPLACE_ME"
+key          = "lmx/staging/terraform.tfstate"
+region       = "REPLACE_ME"
+use_lockfile = true
 
-# Add provider-specific S3 endpoint and compatibility flags here when the
-# remote-state store is selected. Keep access credentials outside this file and
-# supply them through the backend/provider environment variables supported by
-# the chosen store.
+# For S3-compatible storage, also configure the endpoint and compatibility
+# flags below. Remove this block when using AWS S3 directly.
+#
+# endpoints = {
+#   s3 = "https://REPLACE_ME"
+# }
+# use_path_style              = true
+# skip_credentials_validation = true
+# skip_region_validation      = true
+# skip_requesting_account_id  = true
+# skip_metadata_api_check     = true
+# skip_s3_checksum            = true
