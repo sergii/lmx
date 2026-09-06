@@ -1,16 +1,15 @@
-# Terraform GitHub Actions
+# Terraform and staging GitHub Actions
 
-The Terraform workflow has three safety levels:
+LMX staging uses two separate GitHub Environment boundaries:
 
-1. validation never requires cloud credentials
-2. pull-request plans use read-only Hetzner and state credentials
-3. staging applies use separate write credentials behind the GitHub `staging` environment
+1. `staging-infra` owns cloud writes and Terraform state writes.
+2. `staging` owns application deployment secrets, SSH access, and read-only Terraform state access.
 
-`terraform apply` is never triggered by a pull request or by a normal push.
+This separation lets application deploys become hands-free without giving the deploy workflow permission to create, replace, or delete Hetzner resources.
 
 ## Repository variables
 
-Configure these under repository Actions variables. They are non-secret deployment inputs shared by plan and apply jobs.
+Configure these under repository Actions variables:
 
 | Variable | Required | Example | Purpose |
 | --- | --- | --- | --- |
@@ -22,93 +21,118 @@ Configure these under repository Actions variables. They are non-secret deployme
 | `LMX_STAGING_HOSTNAME` | yes | `staging.example.com` | Public Kamal/TLS hostname |
 | `LMX_STAGING_SSH_PUBLIC_KEY` | yes | `ssh-ed25519 ...` | Public deploy key registered with Hetzner |
 | `LMX_STAGING_SSH_SOURCE_IPS` | yes | `["0.0.0.0/0","::/0"]` | JSON Terraform list of allowed SSH CIDRs |
+| `LMX_STAGING_AUTO_DEPLOY` | no | `false` | Set to `true` only after the first manual staging deploy succeeds |
 
-The SSH public key is not secret. The private key must never be stored in Terraform variables or state.
+The SSH public key is not secret. Its private key must never be stored in Terraform variables or state.
 
-## Repository secrets for plans
+## Repository secrets for pull-request plans
 
-Pull-request plans must not have write access to Hetzner or to Terraform state.
-
-Configure:
+Same-repository Terraform pull requests may use read-only credentials:
 
 - `HCLOUD_TOKEN_PLAN` - Hetzner Cloud API token with Read permission
-- `TF_STATE_ACCESS_KEY_ID_PLAN` - state-store credential with list/read permission
+- `TF_STATE_ACCESS_KEY_ID_PLAN` - state-store list/read credential
 - `TF_STATE_SECRET_ACCESS_KEY_PLAN` - matching read-only secret
 
-The plan runs with `-lock=false`, so the state-store plan credential does not need lock-file write/delete permission.
+Plans run with `-lock=false`, so these credentials do not need state or lock-file write permission. Fork pull requests never receive them.
 
-Fork pull requests never receive the plan credentials. A same-repository pull request is required for the cloud plan job.
+If plan credentials are absent, `fmt`, `init -backend=false`, and `validate` still run; the remote cloud plan is reported as skipped.
 
-If these credentials or required variables have not been configured yet, validation remains green and the cloud plan reports that it was skipped.
-
-## GitHub environment for applies
+## `staging-infra` environment
 
 Create a GitHub Environment named exactly:
+
+```text
+staging-infra
+```
+
+This is the infrastructure write boundary. Configure a required reviewer and disable administrator bypass if you want strict approval.
+
+Environment secrets:
+
+- `HCLOUD_TOKEN` - Hetzner Cloud Read & Write token
+- `TF_STATE_ACCESS_KEY_ID` - state-store read/write credential
+- `TF_STATE_SECRET_ACCESS_KEY` - matching state-store secret
+
+The state credential needs state object read/write access plus get/put/delete access to `<state-key>.tflock` because native S3 lock files are enabled.
+
+Run an apply with Actions -> Terraform -> Run workflow, choose `apply`, and enter `apply-staging`. Normal pushes and pull requests never apply infrastructure.
+
+## `staging` environment
+
+Create a second GitHub Environment named exactly:
 
 ```text
 staging
 ```
 
-Configure a required reviewer before adding write credentials. Disable administrator bypass if you want the approval boundary to be strict.
+This is the application deployment boundary. For hands-free staging, do not require a reviewer here; keep the workflow itself restricted to successful `CI` push runs on `main`. The workflow has no Hetzner API token and cannot apply Terraform.
 
-Environment secrets:
+Environment secrets for infrastructure discovery and SSH:
 
-- `HCLOUD_TOKEN` - Hetzner Cloud API token with Read & Write permission
-- `TF_STATE_ACCESS_KEY_ID` - state-store read/write credential
-- `TF_STATE_SECRET_ACCESS_KEY` - matching state-store secret
+- `TF_STATE_ACCESS_KEY_ID` - read-only state credential
+- `TF_STATE_SECRET_ACCESS_KEY` - matching read-only state secret
+- `LMX_STAGING_SSH_PRIVATE_KEY` - private half of `LMX_STAGING_SSH_PUBLIC_KEY`
 
-The write state credential needs access to the state object and, because S3 lock files are enabled, get/put/delete access to `<state-key>.tflock`.
+Environment application secrets:
 
-Do not reuse the plan token as the apply token.
+- `RAILS_MASTER_KEY`
+- `POSTGRES_OWNER_PASSWORD`
+- `POSTGRES_RUNTIME_PASSWORD`
+- `LMX_PHASE0_WORKSPACE_ID`
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_CHAT_ID`
+- `OTEL_EXPORTER_OTLP_ENDPOINT`
+- `OTEL_EXPORTER_OTLP_HEADERS` when required by the collector
+- `LMX_MCP_OAUTH_AUTHORIZATION_SERVERS`
+- `LMX_MCP_OAUTH_SCOPES`
+- `LMX_MCP_OAUTH_INTROSPECTION_ENDPOINT`
+- `LMX_MCP_OAUTH_INTROSPECTION_CLIENT_ID`
+- `LMX_MCP_OAUTH_INTROSPECTION_CLIENT_SECRET`
+
+No database URLs or GHCR password are stored as staging secrets. The workflow derives all eight database URLs from the two PostgreSQL passwords and uses the workflow-scoped GitHub token for GHCR.
+
+## Automated deployment flow
+
+`.github/workflows/deploy-staging.yml` can be launched manually from `main`. Once the first deployment succeeds, set:
+
+```text
+LMX_STAGING_AUTO_DEPLOY=true
+```
+
+A successful `CI` workflow caused by a `push` to `main` then triggers:
+
+```text
+read Terraform outputs
+-> configure SSH
+-> derive runtime/migration DB URLs
+-> bootstrap Docker if needed
+-> verify persistent Hetzner volume
+-> create Kamal network if needed
+-> boot/start PostgreSQL accessory
+-> wait for PostgreSQL
+-> run owner migrations over an SSH tunnel
+-> provision/update restricted lmx_app grants
+-> kamal deploy
+-> GET /up
+-> verify MCP protected-resource metadata
+-> run Phase 0 source acceptance
+-> run Phase 0 readiness
+```
+
+Runtime Rails URLs point to `lmx-staging-db:5432` on the private Kamal Docker network. Migration URLs point to `127.0.0.1:15432` on the GitHub runner and exist only while the SSH tunnel is active. PostgreSQL itself remains published only on the staging host loopback.
 
 ## Remote state requirements
 
-The state bucket exists outside the LMX staging Terraform configuration. This avoids making the infrastructure state store dependent on the infrastructure it manages.
+The state bucket exists outside the LMX staging Terraform configuration so the infrastructure does not own its own state store.
 
-For AWS S3, enable bucket versioning and use native S3 locking via `use_lockfile = true`.
+For AWS S3, enable bucket versioning. For S3-compatible storage, set `TF_STATE_S3_COMPATIBLE=true` and `TF_STATE_ENDPOINT` and prove locking/recovery before relying on it long term.
 
-For S3-compatible storage, set `TF_STATE_S3_COMPATIBLE=true` and `TF_STATE_ENDPOINT`. The helper emits the compatibility flags used by the S3 backend. S3-compatible support is provider-dependent, so prove locking and recovery before relying on it for production.
+Before putting durable PostgreSQL data on the volume:
 
-Credentials are supplied through `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` only. They are never written into the generated backend HCL.
-
-## Pull-request plan
-
-After the variables and read-only secrets exist, every same-repository pull request touching Terraform automatically runs:
-
-```text
-fmt -> validate -> remote-state init -> terraform plan -lock=false
-```
-
-The plan is printed into the workflow job summary.
-
-## Staging apply
-
-Apply is intentionally explicit for the bootstrap phase:
-
-1. open Actions -> Terraform -> Run workflow
-2. select `action = apply`
-3. enter `confirmation = apply-staging`
-4. approve the `staging` environment deployment when GitHub asks
-
-The job then executes:
-
-```text
-remote-state init
--> terraform plan -out=tfplan
--> terraform apply tfplan
--> publish staging IP/hostname/volume outputs
-```
-
-This keeps the first infrastructure creation reviewed. Once the staging lifecycle has been proven, the trigger can be changed to `push` on `main` while retaining the protected `staging` environment approval gate.
-
-## State recovery test
-
-Before the first long-lived staging workload:
-
-1. run one successful apply
+1. run one successful reviewed Terraform apply
 2. confirm the remote state object exists
-3. confirm a plan can read it with the read-only credentials
-4. confirm locking prevents a competing writer
-5. confirm the bucket/versioning policy allows recovery of a previous state object version
-
-Do not deploy PostgreSQL data until remote state and volume delete protection have both been proven.
+3. confirm a read-only plan can read it
+4. confirm a competing writer is blocked by the lock file
+5. confirm state object version recovery works
+6. run the first manual Deploy staging workflow
+7. only then enable `LMX_STAGING_AUTO_DEPLOY=true`
