@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${LMX_STAGING_DATA_VOLUME_PATH:?LMX_STAGING_DATA_VOLUME_PATH is required}"
+
+if [[ ! "${LMX_STAGING_DATA_VOLUME_PATH}" =~ ^/mnt/HC_Volume_[0-9]+$ ]]; then
+  echo "Refusing unexpected staging data volume path: ${LMX_STAGING_DATA_VOLUME_PATH}" >&2
+  exit 1
+fi
+
+kamal_bin="${KAMAL_BIN:-./bin/kamal}"
+volume_path="${LMX_STAGING_DATA_VOLUME_PATH}"
+
+# The Hetzner volume must already be mounted by Terraform before any container
+# receives a bind mount. Rails runs as uid/gid 1000; PostgreSQL's entrypoint runs
+# as root first and initializes/chowns its versioned PGDATA below this directory.
+remote_command="mountpoint -q ${volume_path} && install -d -o 1000 -g 1000 -m 0750 ${volume_path}/storage && install -d -m 0755 ${volume_path}/postgres"
+
+"${kamal_bin}" server exec --primary -d staging "${remote_command}"

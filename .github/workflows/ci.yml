@@ -61,6 +61,7 @@ jobs:
       BUNDLE_GEMFILE: ${{ github.workspace }}/application/Gemfile
       LMX_STAGING_HOST: 127.0.0.1
       LMX_STAGING_HOSTNAME: staging.lmx.invalid
+      LMX_STAGING_DATA_VOLUME_PATH: /mnt/HC_Volume_1
       KAMAL_REGISTRY_USERNAME: sergii
       KAMAL_REGISTRY_PASSWORD: ci-registry-token
       RAILS_MASTER_KEY: ci-master-key
@@ -72,6 +73,7 @@ jobs:
       CACHE_DATABASE_MIGRATION_URL: postgresql://lmx_owner:owner@db.invalid/lmx_cache
       QUEUE_DATABASE_MIGRATION_URL: postgresql://lmx_owner:owner@db.invalid/lmx_queue
       CABLE_DATABASE_MIGRATION_URL: postgresql://lmx_owner:owner@db.invalid/lmx_cable
+      POSTGRES_OWNER_PASSWORD: owner
       POSTGRES_RUNTIME_PASSWORD: runtime
       LMX_PHASE0_WORKSPACE_ID: 00000000-0000-0000-0000-000000000001
       TELEGRAM_BOT_TOKEN: ci-telegram-token
@@ -95,7 +97,7 @@ jobs:
           ruby-version: 4.0.1
           bundler-cache: true
       - name: Validate deployment scripts
-        run: bash -n bin/prepare-database bin/provision-runtime-databases
+        run: bash -n bin/prepare-database bin/provision-runtime-databases bin/prepare-staging-host
       - name: Validate staging Kamal configuration
         run: bin/kamal config -d staging > /dev/null
 
