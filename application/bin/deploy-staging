@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+required=(
+  LMX_STAGING_HOST
+  LMX_STAGING_HOSTNAME
+  LMX_STAGING_DATA_VOLUME_PATH
+  DATABASE_URL
+  CACHE_DATABASE_URL
+  QUEUE_DATABASE_URL
+  CABLE_DATABASE_URL
+  DATABASE_MIGRATION_URL
+  CACHE_DATABASE_MIGRATION_URL
+  QUEUE_DATABASE_MIGRATION_URL
+  CABLE_DATABASE_MIGRATION_URL
+  POSTGRES_OWNER_PASSWORD
+  POSTGRES_RUNTIME_PASSWORD
+)
+
+for name in "${required[@]}"; do
+  if [[ -z "${!name:-}" ]]; then
+    echo "${name} is required for staging deployment" >&2
+    exit 1
+  fi
+done
+
+kamal_bin="${KAMAL_BIN:-./bin/kamal}"
+
+# Bootstrap is idempotent: Kamal installs Docker only when it is missing.
+"${kamal_bin}" server bootstrap -d staging
+./bin/prepare-staging-host
+
+# Accessories and app containers share Kamal's private Docker network. Creating
+# it explicitly makes the first database boot independent of proxy/app boot.
+"${kamal_bin}" server exec --primary -d staging \
+  "docker network inspect kamal >/dev/null 2>&1 || docker network create kamal"
+
+if "${kamal_bin}" server exec --primary -d staging \
+  "docker inspect lmx-staging-db >/dev/null 2>&1"; then
+  "${kamal_bin}" accessory start db -d staging
+else
+  "${kamal_bin}" accessory boot db -d staging
+fi
+
+postgres_ready=false
+for _ in $(seq 1 30); do
+  if "${kamal_bin}" accessory exec db -d staging \
+    "pg_isready -U lmx_owner -d lmx_primary" >/dev/null 2>&1; then
+    postgres_ready=true
+    break
+  fi
+  sleep 2
+done
+
+if [[ "${postgres_ready}" != "true" ]]; then
+  echo "Staging PostgreSQL did not become ready" >&2
+  "${kamal_bin}" accessory logs db -d staging --lines 100 || true
+  exit 1
+fi
+
+# Owner URLs are short-lived migration credentials. Runtime URLs use lmx_app and
+# remain the only database credentials injected into long-running app containers.
+RAILS_ENV=production ./bin/prepare-database
+./bin/provision-runtime-databases
+
+"${kamal_bin}" deploy -d staging
