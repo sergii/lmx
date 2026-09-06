@@ -1,0 +1,230 @@
+name: Terraform
+
+on:
+  pull_request:
+    paths:
+      - "infra/terraform/**"
+      - ".github/workflows/terraform.yml"
+  push:
+    branches: [ main ]
+    paths:
+      - "infra/terraform/**"
+      - ".github/workflows/terraform.yml"
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Terraform action to run against staging"
+        required: true
+        default: plan
+        type: choice
+        options:
+          - plan
+          - apply
+      confirmation:
+        description: "Type apply-staging when action=apply"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  TERRAFORM_VERSION: "1.16.1"
+  TF_ROOT: infra/terraform/environments/staging
+
+concurrency:
+  group: terraform-staging
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - name: Check Terraform formatting
+        run: terraform fmt -check -recursive infra/terraform
+
+      - name: Validate helper scripts
+        run: bash -n infra/terraform/bin/write-backend-config
+
+      - name: Initialize providers without remote state
+        run: terraform -chdir=${TF_ROOT} init -backend=false
+
+      - name: Validate staging configuration
+        run: terraform -chdir=${TF_ROOT} validate
+
+  plan:
+    if: >-
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event_name == 'workflow_dispatch' && inputs.action == 'plan')
+    needs: validate
+    runs-on: ubuntu-latest
+    env:
+      HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN_PLAN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.TF_STATE_ACCESS_KEY_ID_PLAN }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_STATE_SECRET_ACCESS_KEY_PLAN }}
+      TF_STATE_KEY: ${{ vars.TF_STATE_KEY || 'lmx/staging/terraform.tfstate' }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_STATE_REGION: ${{ vars.TF_STATE_REGION }}
+      TF_STATE_ENDPOINT: ${{ vars.TF_STATE_ENDPOINT }}
+      TF_STATE_S3_COMPATIBLE: ${{ vars.TF_STATE_S3_COMPATIBLE || 'false' }}
+      TF_VAR_staging_hostname: ${{ vars.LMX_STAGING_HOSTNAME }}
+      TF_VAR_ssh_public_key: ${{ vars.LMX_STAGING_SSH_PUBLIC_KEY }}
+      TF_VAR_ssh_source_ips: ${{ vars.LMX_STAGING_SSH_SOURCE_IPS }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Check plan configuration
+        id: configured
+        shell: bash
+        run: |
+          required=(
+            HCLOUD_TOKEN
+            AWS_ACCESS_KEY_ID
+            AWS_SECRET_ACCESS_KEY
+            TF_STATE_BUCKET
+            TF_STATE_REGION
+            TF_VAR_staging_hostname
+            TF_VAR_ssh_public_key
+            TF_VAR_ssh_source_ips
+          )
+          missing=()
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              missing+=("$name")
+            fi
+          done
+          if (( ${#missing[@]} > 0 )); then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            printf 'Terraform cloud plan skipped. Missing GitHub configuration: %s\n' "${missing[*]}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Terraform
+        if: steps.configured.outputs.configured == 'true'
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - name: Write backend configuration
+        if: steps.configured.outputs.configured == 'true'
+        run: infra/terraform/bin/write-backend-config "${TF_ROOT}/backend.ci.hcl"
+
+      - name: Initialize remote state
+        if: steps.configured.outputs.configured == 'true'
+        run: terraform -chdir=${TF_ROOT} init -backend-config=backend.ci.hcl
+
+      - name: Create read-only plan
+        if: steps.configured.outputs.configured == 'true'
+        run: |
+          terraform -chdir=${TF_ROOT} plan \
+            -lock=false \
+            -no-color \
+            -out=tfplan \
+            | tee "${TF_ROOT}/terraform-plan.txt"
+          {
+            echo '## Terraform staging plan'
+            echo '```text'
+            cat "${TF_ROOT}/terraform-plan.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  apply:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      inputs.action == 'apply'
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.TF_STATE_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_STATE_SECRET_ACCESS_KEY }}
+      TF_STATE_KEY: ${{ vars.TF_STATE_KEY || 'lmx/staging/terraform.tfstate' }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_STATE_REGION: ${{ vars.TF_STATE_REGION }}
+      TF_STATE_ENDPOINT: ${{ vars.TF_STATE_ENDPOINT }}
+      TF_STATE_S3_COMPATIBLE: ${{ vars.TF_STATE_S3_COMPATIBLE || 'false' }}
+      TF_VAR_staging_hostname: ${{ vars.LMX_STAGING_HOSTNAME }}
+      TF_VAR_ssh_public_key: ${{ vars.LMX_STAGING_SSH_PUBLIC_KEY }}
+      TF_VAR_ssh_source_ips: ${{ vars.LMX_STAGING_SSH_SOURCE_IPS }}
+    steps:
+      - name: Require explicit apply confirmation
+        shell: bash
+        run: |
+          if [[ "${{ inputs.confirmation }}" != "apply-staging" ]]; then
+            echo "Refusing apply: confirmation must be exactly apply-staging." >&2
+            exit 1
+          fi
+
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Check apply configuration
+        shell: bash
+        run: |
+          required=(
+            HCLOUD_TOKEN
+            AWS_ACCESS_KEY_ID
+            AWS_SECRET_ACCESS_KEY
+            TF_STATE_BUCKET
+            TF_STATE_REGION
+            TF_VAR_staging_hostname
+            TF_VAR_ssh_public_key
+            TF_VAR_ssh_source_ips
+          )
+          missing=()
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              missing+=("$name")
+            fi
+          done
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Missing Terraform staging configuration: %s\n' "${missing[*]}" >&2
+            exit 1
+          fi
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - name: Write backend configuration
+        run: infra/terraform/bin/write-backend-config "${TF_ROOT}/backend.ci.hcl"
+
+      - name: Initialize remote state
+        run: terraform -chdir=${TF_ROOT} init -backend-config=backend.ci.hcl
+
+      - name: Create apply plan
+        run: terraform -chdir=${TF_ROOT} plan -out=tfplan
+
+      - name: Apply reviewed staging infrastructure
+        run: terraform -chdir=${TF_ROOT} apply -auto-approve tfplan
+
+      - name: Publish staging outputs
+        shell: bash
+        run: |
+          host="$(terraform -chdir=${TF_ROOT} output -raw staging_ipv4)"
+          hostname="$(terraform -chdir=${TF_ROOT} output -raw staging_hostname)"
+          mount_path="$(terraform -chdir=${TF_ROOT} output -raw data_volume_mount_path)"
+          {
+            echo '## Terraform staging outputs'
+            printf -- '- Host: `%s`\n' "$host"
+            printf -- '- Hostname: `%s`\n' "$hostname"
+            printf -- '- Data volume mount: `%s`\n' "$mount_path"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,15 @@
+staging_hostname = "staging.lmx.example"
+ssh_public_key   = "ssh-ed25519 AAAA... lmx-staging"
+
+# GitHub-hosted runners do not have one stable egress CIDR. Start broad only if
+# required for CI deployment, keep password authentication disabled, and narrow
+# this once a private/static deployment runner is available.
+ssh_source_ips = [
+  "0.0.0.0/0",
+  "::/0",
+]
+
+server_type    = "cx23"
+location       = "hel1"
+image          = "ubuntu-24.04"
+volume_size_gb = 50
