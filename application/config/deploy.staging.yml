@@ -14,4 +14,22 @@ env:
     LMX_MCP_OAUTH_RESOURCE_NAME: LMX MCP staging
 
 volumes:
-  - "lmx_staging_storage:/rails/storage"
+  - "<%= ENV.fetch("LMX_STAGING_DATA_VOLUME_PATH") %>/storage:/rails/storage"
+
+accessories:
+  db:
+    service: lmx-staging-db
+    image: postgres:18.4
+    host: <%= ENV.fetch("LMX_STAGING_HOST") %>
+    port: "127.0.0.1:5432:5432"
+    env:
+      clear:
+        POSTGRES_USER: lmx_owner
+        POSTGRES_DB: lmx_primary
+        POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+      secret:
+        - POSTGRES_PASSWORD:POSTGRES_OWNER_PASSWORD
+    files:
+      - config/postgres/init-lmx-databases.sh:/docker-entrypoint-initdb.d/10-lmx-databases.sh:ro
+    volumes:
+      - "<%= ENV.fetch("LMX_STAGING_DATA_VOLUME_PATH") %>/postgres:/var/lib/postgresql"
