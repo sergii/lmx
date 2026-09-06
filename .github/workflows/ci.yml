@@ -65,14 +65,14 @@ jobs:
       KAMAL_REGISTRY_USERNAME: sergii
       KAMAL_REGISTRY_PASSWORD: ci-registry-token
       RAILS_MASTER_KEY: ci-master-key
-      DATABASE_URL: postgresql://lmx_app:runtime@db.invalid/lmx_primary
-      CACHE_DATABASE_URL: postgresql://lmx_app:runtime@db.invalid/lmx_cache
-      QUEUE_DATABASE_URL: postgresql://lmx_app:runtime@db.invalid/lmx_queue
-      CABLE_DATABASE_URL: postgresql://lmx_app:runtime@db.invalid/lmx_cable
-      DATABASE_MIGRATION_URL: postgresql://lmx_owner:owner@db.invalid/lmx_primary
-      CACHE_DATABASE_MIGRATION_URL: postgresql://lmx_owner:owner@db.invalid/lmx_cache
-      QUEUE_DATABASE_MIGRATION_URL: postgresql://lmx_owner:owner@db.invalid/lmx_queue
-      CABLE_DATABASE_MIGRATION_URL: postgresql://lmx_owner:owner@db.invalid/lmx_cable
+      DATABASE_URL: postgresql://lmx_app:runtime@lmx-staging-db:5432/lmx_primary
+      CACHE_DATABASE_URL: postgresql://lmx_app:runtime@lmx-staging-db:5432/lmx_cache
+      QUEUE_DATABASE_URL: postgresql://lmx_app:runtime@lmx-staging-db:5432/lmx_queue
+      CABLE_DATABASE_URL: postgresql://lmx_app:runtime@lmx-staging-db:5432/lmx_cable
+      DATABASE_MIGRATION_URL: postgresql://lmx_owner:owner@127.0.0.1:15432/lmx_primary
+      CACHE_DATABASE_MIGRATION_URL: postgresql://lmx_owner:owner@127.0.0.1:15432/lmx_cache
+      QUEUE_DATABASE_MIGRATION_URL: postgresql://lmx_owner:owner@127.0.0.1:15432/lmx_queue
+      CABLE_DATABASE_MIGRATION_URL: postgresql://lmx_owner:owner@127.0.0.1:15432/lmx_cable
       POSTGRES_OWNER_PASSWORD: owner
       POSTGRES_RUNTIME_PASSWORD: runtime
       LMX_PHASE0_WORKSPACE_ID: 00000000-0000-0000-0000-000000000001
@@ -97,7 +97,7 @@ jobs:
           ruby-version: 4.0.1
           bundler-cache: true
       - name: Validate deployment scripts
-        run: bash -n bin/prepare-database bin/provision-runtime-databases bin/prepare-staging-host
+        run: bash -n bin/prepare-database bin/provision-runtime-databases bin/prepare-staging-host bin/deploy-staging
       - name: Validate staging Kamal configuration
         run: bin/kamal config -d staging > /dev/null
 
