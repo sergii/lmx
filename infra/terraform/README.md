@@ -8,6 +8,8 @@ Kubernetes is intentionally not part of the staging architecture.
 
 ```text
 infra/terraform/
+  bin/
+    write-backend-config
   environments/
     staging/
       backend.s3.hcl.example
@@ -19,6 +21,8 @@ infra/terraform/
       variables.tf
       versions.tf
 ```
+
+See [`GITHUB_ACTIONS.md`](GITHUB_ACTIONS.md) for the exact repository variables, read-only plan credentials, protected staging apply credentials, and remote-state setup contract.
 
 ## Staging resources
 
@@ -37,7 +41,7 @@ The configuration currently targets Terraform 1.16.x and `hetznercloud/hcloud` 1
 
 ## Secrets and inputs
 
-Do not commit real values in `*.tfvars` or `backend.hcl`.
+Do not commit real values in `*.tfvars`, backend configuration, Terraform state, or plan files.
 
 The Hetzner provider reads its API token from:
 
@@ -57,11 +61,19 @@ Opening SSH globally is acceptable only with key-only authentication and is main
 
 ## Remote state
 
-The environment declares an S3 backend but intentionally does not commit backend credentials or provider-specific endpoint values. Copy `backend.s3.hcl.example` to `backend.hcl`, fill it with the chosen S3-compatible state store, and initialize with:
+The environment declares an S3 backend but intentionally keeps its concrete bucket, endpoint, and credentials outside Terraform source.
+
+Remote state is mandatory before shared staging applies. The state bucket must exist outside this Terraform configuration so destroying or replacing staging cannot destroy the state store itself.
+
+For local operation, copy `backend.s3.hcl.example` to `backend.hcl` and initialize with:
 
 ```bash
 terraform -chdir=environments/staging init -backend-config=backend.hcl
 ```
+
+For GitHub Actions, `bin/write-backend-config` generates the non-secret backend configuration from repository variables while credentials stay in environment variables.
+
+S3 lock files are enabled with `use_lockfile = true`. When using AWS S3, enable bucket versioning for state recovery. S3-compatible storage is supported through an explicit endpoint/compatibility mode and must be tested for locking before long-lived staging data depends on it.
 
 Never run shared staging applies from local state.
 
@@ -69,13 +81,37 @@ Never run shared staging applies from local state.
 
 ```bash
 terraform fmt -check -recursive .
+bash -n bin/write-backend-config
 terraform -chdir=environments/staging init -backend=false
 terraform -chdir=environments/staging validate
 ```
 
 GitHub Actions runs the same checks automatically for changes under `infra/terraform/**`.
 
-## First plan/apply
+## Automated plan/apply boundary
+
+The GitHub Terraform workflow separates credentials intentionally:
+
+```text
+PR
+  -> fmt / validate
+  -> read-only Hetzner token
+  -> read-only remote state
+  -> terraform plan -lock=false
+
+manual apply from main
+  -> protected GitHub Environment: staging
+  -> write Hetzner token
+  -> write/locking remote-state credentials
+  -> terraform plan -out=tfplan
+  -> terraform apply tfplan
+```
+
+If the read-only plan credentials have not been configured, pull requests still validate successfully and report that the cloud plan was skipped.
+
+`apply` can only be requested through `workflow_dispatch` from `main`, requires the literal confirmation `apply-staging`, and is additionally gated by the GitHub `staging` environment. Configure a required reviewer on that environment before adding write credentials.
+
+## First local plan/apply
 
 After remote state and secrets exist:
 
@@ -94,11 +130,12 @@ export LMX_STAGING_HOSTNAME="$(terraform -chdir=environments/staging output -raw
 
 ## Next infrastructure slice
 
-After the first host is provisioned and the volume mount is verified:
+After remote state is configured and the first reviewed apply succeeds:
 
-1. add the PostgreSQL Kamal accessory backed by `data_volume_mount_path`
-2. automate the four Rails databases plus owner/runtime roles
-3. manage staging DNS with the actual DNS provider
-4. add GitHub Environment `staging` secrets and a reviewed Terraform plan/apply workflow
+1. verify the volume mount and state recovery/locking behavior
+2. add the PostgreSQL Kamal accessory backed by `data_volume_mount_path`
+3. automate the four Rails databases plus owner/runtime roles
+4. manage staging DNS with the actual DNS provider
 5. feed Terraform outputs directly into the Kamal staging deployment workflow
-6. run Phase 0 and MCP acceptance after deployment
+6. add post-deploy `/up`, Phase 0, and MCP acceptance gates
+7. after the lifecycle is proven, decide whether protected applies should remain manual or trigger automatically from `main`
