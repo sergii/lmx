@@ -1,0 +1,17 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+ssh_pwauth: false
+disable_root: false
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/99-lmx-hardening.conf
+    permissions: "0644"
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin prohibit-password
+      X11Forwarding no
+
+runcmd:
+  - systemctl restart ssh

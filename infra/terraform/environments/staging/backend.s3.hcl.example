@@ -1,0 +1,11 @@
+# Copy to backend.hcl and replace every placeholder.
+# The concrete S3-compatible provider is intentionally not hard-coded here.
+
+bucket = "REPLACE_ME"
+key    = "lmx/staging/terraform.tfstate"
+region = "REPLACE_ME"
+
+# Add provider-specific S3 endpoint and compatibility flags here when the
+# remote-state store is selected. Keep access credentials outside this file and
+# supply them through the backend/provider environment variables supported by
+# the chosen store.
