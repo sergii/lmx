@@ -30,6 +30,6 @@ accessories:
       secret:
         - POSTGRES_PASSWORD:POSTGRES_OWNER_PASSWORD
     files:
-      - config/postgres/init-lmx-databases.sh:/docker-entrypoint-initdb.d/10-lmx-databases.sh:ro
+      - config/postgres/init-lmx-databases.sql:/docker-entrypoint-initdb.d/10-lmx-databases.sql:ro
     volumes:
       - "<%= ENV.fetch("LMX_STAGING_DATA_VOLUME_PATH") %>/postgres:/var/lib/postgresql"
