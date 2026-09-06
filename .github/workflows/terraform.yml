@@ -134,7 +134,7 @@ jobs:
             -lock=false \
             -no-color \
             -out=tfplan \
-            | tee terraform-plan.txt
+            | tee "${TF_ROOT}/terraform-plan.txt"
           {
             echo '## Terraform staging plan'
             echo '```text'
@@ -143,7 +143,10 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   apply:
-    if: github.event_name == 'workflow_dispatch' && inputs.action == 'apply'
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      inputs.action == 'apply'
     needs: validate
     runs-on: ubuntu-latest
     environment: staging
@@ -206,16 +209,14 @@ jobs:
         run: terraform -chdir=${TF_ROOT} apply -auto-approve tfplan
 
       - name: Publish staging outputs
+        shell: bash
         run: |
+          host="$(terraform -chdir=${TF_ROOT} output -raw staging_ipv4)"
+          hostname="$(terraform -chdir=${TF_ROOT} output -raw staging_hostname)"
+          mount_path="$(terraform -chdir=${TF_ROOT} output -raw data_volume_mount_path)"
           {
             echo '## Terraform staging outputs'
-            echo '- Host: `'
-            terraform -chdir=${TF_ROOT} output -raw staging_ipv4
-            echo '`'
-            echo '- Hostname: `'
-            terraform -chdir=${TF_ROOT} output -raw staging_hostname
-            echo '`'
-            echo '- Data volume mount: `'
-            terraform -chdir=${TF_ROOT} output -raw data_volume_mount_path
-            echo '`'
+            printf -- '- Host: `%s`\n' "$host"
+            printf -- '- Hostname: `%s`\n' "$hostname"
+            printf -- '- Data volume mount: `%s`\n' "$mount_path"
           } >> "$GITHUB_STEP_SUMMARY"
