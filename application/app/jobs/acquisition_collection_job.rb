@@ -7,7 +7,7 @@ class AcquisitionCollectionJob < ApplicationJob
   queue_as :acquisition
 
   limits_concurrency(
-    key: ->(source_key) { "acquisition:#{source_key}" },
+    key: ->(source_key, **) { "acquisition:#{source_key}" },
     duration: 30.minutes,
     on_conflict: :discard
   )
@@ -29,15 +29,32 @@ class AcquisitionCollectionJob < ApplicationJob
     "remoteok" => Acquisition::RemoteOk
   }.freeze
 
-  def perform(source_key)
+  def perform(source_key, search: nil)
     source_key = source_key.to_s
     collector = COLLECTORS.fetch(source_key) do
       raise ArgumentError, "unsupported acquisition source #{source_key.inspect}"
     end
 
-    queries = Acquisition::QueryPolicy.source_queries(source_key)
-    return collector.collect if queries.empty?
+    queries = explicit_or_profile_queries(source_key, search)
+    results = if queries.empty?
+      [ collector.collect ]
+    else
+      queries.map { |query| collector.collect(search: query) }
+    end
 
-    queries.map { |search| collector.collect(search:) }
+    results.each do |result|
+      SourceObservationCatalogSync.call(observation_ids: result.observation_ids)
+    end
+
+    queries.empty? ? results.first : results
+  end
+
+  private
+
+  def explicit_or_profile_queries(source_key, search)
+    explicit = search.to_s.strip.presence
+    return [ explicit ] if explicit
+
+    Acquisition::QueryPolicy.source_queries(source_key)
   end
 end
