@@ -3,22 +3,23 @@
 require "rails_helper"
 
 RSpec.describe Acquisition::Djinni, type: :model do
-  FakeResponse = Data.define(:body, :status, :content_type, :url, :fetched_at)
+  let(:response_class) { Data.define(:body, :status, :content_type, :url, :fetched_at) }
+  let(:http_client_class) do
+    Class.new do
+      attr_reader :calls
 
-  class FakeHttpClient
-    attr_reader :calls
+      def initialize(responses:)
+        @responses = responses.dup
+        @calls = []
+      end
 
-    def initialize(responses:)
-      @responses = responses.dup
-      @calls = []
-    end
+      def get(url)
+        @calls << url
+        response = @responses.shift || raise("no fake response configured for #{url}")
+        raise response if response.is_a?(Exception)
 
-    def get(url)
-      @calls << url
-      response = @responses.shift || raise("no fake response configured for #{url}")
-      raise response if response.is_a?(Exception)
-
-      response
+        response
+      end
     end
   end
 
@@ -30,7 +31,7 @@ RSpec.describe Acquisition::Djinni, type: :model do
   let(:feed_url) { "https://djinni.co/jobs/rss/?primary_keyword=Ruby" }
   let(:listing_url) { "https://djinni.co/jobs/?primary_keyword=Ruby" }
   let(:feed_response) do
-    FakeResponse.new(
+    response_class.new(
       body: feed_body,
       status: 200,
       content_type: "application/rss+xml; charset=utf-8",
@@ -39,15 +40,15 @@ RSpec.describe Acquisition::Djinni, type: :model do
     )
   end
   let(:listing_response) do
-    FakeResponse.new(
+    response_class.new(
       body: listing_body,
       status: 200,
       content_type: "text/html; charset=utf-8",
       url: listing_url,
-      fetched_at: fetched_at + 100.milliseconds
+      fetched_at: fetched_at + 0.1
     )
   end
-  let(:http_client) { FakeHttpClient.new(responses: [ feed_response, listing_response ]) }
+  let(:http_client) { http_client_class.new(responses: [ feed_response, listing_response ]) }
   let(:clock) { -> { finished_at } }
 
   it "parses stable facts and publication time from the Djinni RSS feed" do
@@ -138,7 +139,7 @@ RSpec.describe Acquisition::Djinni, type: :model do
 
   it "keeps the RSS run usable when optional listing enrichment fails" do
     enrichment_error = Net::ReadTimeout.new("listing timed out")
-    client = FakeHttpClient.new(responses: [ feed_response, enrichment_error ])
+    client = http_client_class.new(responses: [ feed_response, enrichment_error ])
 
     result = described_class.collect(
       search: "Ruby",
@@ -181,7 +182,7 @@ RSpec.describe Acquisition::Djinni, type: :model do
       described_class.collect(
         run_key: "djinni:rss:http-failure",
         started_at:,
-        http_client: FakeHttpClient.new(responses: [ error ]),
+        http_client: http_client_class.new(responses: [ error ]),
         clock:
       )
     end.to raise_error(Net::ReadTimeout)
