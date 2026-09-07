@@ -4,27 +4,49 @@ require "rails_helper"
 require "yaml"
 
 RSpec.describe AcquisitionCollectionJob, type: :job do
-  it "routes full-feed sources through their public acquisition APIs once" do
-    allow(Acquisition::Dou).to receive(:collect).and_return(:dou_result)
-    allow(Acquisition::Djinni).to receive(:collect).and_return(:djinni_result)
-    allow(Acquisition::RemoteOk).to receive(:collect).and_return(:remoteok_result)
+  let(:result_type) { Data.define(:observation_ids) }
 
-    expect(described_class.new.perform("dou")).to eq(:dou_result)
-    expect(described_class.new.perform("djinni")).to eq(:djinni_result)
-    expect(described_class.new.perform("remoteok")).to eq(:remoteok_result)
+  before do
+    allow(SourceObservationCatalogSync).to receive(:call).and_return([])
+  end
+
+  it "routes full-feed sources through their public acquisition APIs once and reconciles observations" do
+    dou_result = result_type.new([ "source_observation_dou" ])
+    djinni_result = result_type.new([ "source_observation_djinni" ])
+    remoteok_result = result_type.new([ "source_observation_remoteok" ])
+    allow(Acquisition::Dou).to receive(:collect).and_return(dou_result)
+    allow(Acquisition::Djinni).to receive(:collect).and_return(djinni_result)
+    allow(Acquisition::RemoteOk).to receive(:collect).and_return(remoteok_result)
+
+    expect(described_class.new.perform("dou")).to eq(dou_result)
+    expect(described_class.new.perform("djinni")).to eq(djinni_result)
+    expect(described_class.new.perform("remoteok")).to eq(remoteok_result)
     expect(Acquisition::Dou).to have_received(:collect).once
     expect(Acquisition::Djinni).to have_received(:collect).once
     expect(Acquisition::RemoteOk).to have_received(:collect).once
+    expect(SourceObservationCatalogSync).to have_received(:call).with(observation_ids: [ "source_observation_dou" ])
+    expect(SourceObservationCatalogSync).to have_received(:call).with(observation_ids: [ "source_observation_djinni" ])
+    expect(SourceObservationCatalogSync).to have_received(:call).with(observation_ids: [ "source_observation_remoteok" ])
   end
 
   it "runs search-bound sources once per configured profile query" do
-    allow(Acquisition::WorkUa).to receive(:collect).and_return(:work_ua_result)
-    allow(Acquisition::RobotaUa).to receive(:collect).and_return(:robota_result)
+    work_ua_result = result_type.new([ "source_observation_work" ])
+    robota_result = result_type.new([ "source_observation_robota" ])
+    allow(Acquisition::WorkUa).to receive(:collect).and_return(work_ua_result)
+    allow(Acquisition::RobotaUa).to receive(:collect).and_return(robota_result)
 
-    expect(described_class.new.perform("work_ua")).to eq([ :work_ua_result ])
-    expect(described_class.new.perform("robota_ua")).to eq([ :robota_result ])
+    expect(described_class.new.perform("work_ua")).to eq([ work_ua_result ])
+    expect(described_class.new.perform("robota_ua")).to eq([ robota_result ])
     expect(Acquisition::WorkUa).to have_received(:collect).with(search: "Ruby").once
     expect(Acquisition::RobotaUa).to have_received(:collect).with(search: "Ruby").once
+  end
+
+  it "allows an explicit local search to override source query policy" do
+    result = result_type.new([])
+    allow(Acquisition::Dou).to receive(:collect).and_return(result)
+
+    expect(described_class.new.perform("dou", search: "Ruby Rails")).to eq([ result ])
+    expect(Acquisition::Dou).to have_received(:collect).with(search: "Ruby Rails").once
   end
 
   it "fails explicitly for an unsupported source" do
