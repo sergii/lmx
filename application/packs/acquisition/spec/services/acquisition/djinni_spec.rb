@@ -31,7 +31,7 @@ RSpec.describe Acquisition::Djinni, type: :model do
       body: feed_body,
       status: 200,
       content_type: "application/rss+xml; charset=utf-8",
-      url: "https://djinni.co/jobs/rss/?keywords=Ruby",
+      url: "https://djinni.co/jobs/rss/?primary_keyword=Ruby",
       fetched_at:
     )
   end
@@ -50,7 +50,7 @@ RSpec.describe Acquisition::Djinni, type: :model do
     )
   end
 
-  it "uses RSS as the configured primary Djinni adapter and persists durable evidence" do
+  it "uses the Djinni primary keyword filter for searched RSS feeds" do
     result = described_class.collect(
       search: "Ruby",
       run_key: "djinni:rss:ruby:2026-09-02T20:00:00Z",
@@ -62,7 +62,7 @@ RSpec.describe Acquisition::Djinni, type: :model do
     expect(result).to have_attributes(
       status: "succeeded",
       strategy: "rss",
-      request_url: "https://djinni.co/jobs/rss/?keywords=Ruby",
+      request_url: "https://djinni.co/jobs/rss/?primary_keyword=Ruby",
       fetched_count: 1,
       discovered_count: 2,
       observed_count: 2
@@ -78,7 +78,7 @@ RSpec.describe Acquisition::Djinni, type: :model do
       parser_version: "djinni-rss-v1"
     )
     expect(raw.body.b).to eq(feed_body.b)
-    expect(raw.source_uri).to eq("https://djinni.co/jobs/rss/?keywords=Ruby")
+    expect(raw.source_uri).to eq("https://djinni.co/jobs/rss/?primary_keyword=Ruby")
     expect(observations.map(&:external_id)).to eq(%w[742001 742002])
     expect(observations.first).to have_attributes(
       source_published_at: Time.zone.parse("2026-09-02 09:30:00 UTC")
@@ -108,7 +108,7 @@ RSpec.describe Acquisition::Djinni, type: :model do
     second = described_class.collect(**attributes)
 
     expect(second).to eq(first)
-    expect(http_client.calls).to eq([ "https://djinni.co/jobs/rss/?keywords=Ruby" ])
+    expect(http_client.calls).to eq([ "https://djinni.co/jobs/rss/?primary_keyword=Ruby" ])
     expect(SourceRun.count).to eq(1)
     expect(RawPayload.count).to eq(1)
     expect(IngestionRecord.count).to eq(1)

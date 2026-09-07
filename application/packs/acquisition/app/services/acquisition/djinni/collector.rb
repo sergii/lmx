@@ -202,7 +202,7 @@ module Acquisition
       def request_url
         @request_url ||= begin
           uri = URI.join(source_base_url, REQUEST_PATHS.fetch(strategy_type))
-          uri.query = URI.encode_www_form(keywords: search) if search
+          uri.query = URI.encode_www_form(primary_keyword: search) if search
           uri.to_s
         end
       end
