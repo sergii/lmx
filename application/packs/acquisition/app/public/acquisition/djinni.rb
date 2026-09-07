@@ -3,13 +3,15 @@
 module Acquisition
   module Djinni
     SOURCE_KEY = "djinni"
-    COLLECTOR_VERSION = "djinni-collector-v1"
+    COLLECTOR_VERSION = "djinni-collector-v2"
     ADAPTER_VERSIONS = {
       "rss" => "djinni-rss-v1"
     }.freeze
     PARSER_VERSIONS = {
       "rss" => "djinni-rss-v1"
     }.freeze
+    ENRICHMENT_ADAPTER_VERSION = "djinni-http-html-enrichment-v1"
+    ENRICHMENT_PARSER_VERSION = "djinni-listing-enrichment-v1"
 
     Result = Data.define(
       :source_run_id,
