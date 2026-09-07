@@ -28,7 +28,7 @@ RSpec.describe "lmx:source" do
     task.reenable
     allow(AcquisitionCollectionJob).to receive(:new).and_return(job)
     allow(job).to receive(:perform) do |source_key, search:|
-      raise Acquisition::WorkUa::HttpClient::HttpError.new(status: 403, url: "https://www.work.ua/jobs-Ruby/") if source_key == "work_ua"
+      raise "Work.ua HTTP request failed with status 403" if source_key == "work_ua"
 
       result_class.new(2, "source_run_#{source_key}")
     end
