@@ -21,7 +21,7 @@ module Acquisition
       MAX_REDIRECTS = 3
       ACCEPT = "application/rss+xml,application/xml,text/xml,text/html,application/xhtml+xml;q=0.8,*/*;q=0.1"
 
-      def initialize(open_timeout: 5, read_timeout: 15, user_agent: "LMX Acquisition/1.0")
+      def initialize(open_timeout: 5, read_timeout: 15, user_agent: "ContentFetcher/1.0")
         @open_timeout = open_timeout
         @read_timeout = read_timeout
         @user_agent = user_agent
