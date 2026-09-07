@@ -25,10 +25,11 @@ source_priorities:
   wellfound: { lane: broad_international, weight: 50 }
 
 acquisition:
-  # Sources that expose a complete feed do not need source queries here.
   # Search-bound sources are collected once per query, with raw evidence kept per run.
   # These are operational query strings; targets above describe the durable search intent.
   source_queries:
+    djinni:
+      - Ruby
     work_ua:
       - Ruby
     robota_ua:

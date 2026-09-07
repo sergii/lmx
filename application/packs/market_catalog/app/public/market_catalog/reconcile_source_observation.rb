@@ -29,6 +29,7 @@ module MarketCatalog
         company = find_or_create_company
         posting = record_posting(company:)
         opening = posting.job_opening || create_and_link_opening(posting:, company:)
+        backfill_opening_company(opening:, company:)
         snapshot = record_snapshot(posting:)
         ReconcilePostingLifecycle.call(posting_id: posting.typed_id)
 
@@ -120,6 +121,14 @@ module MarketCatalog
       )
 
       opening
+    end
+
+    def backfill_opening_company(opening:, company:)
+      return if company.blank? || opening.primary_company.present?
+
+      opening.with_lock do
+        opening.update!(primary_company: company) if opening.primary_company.blank?
+      end
     end
 
     def record_snapshot(posting:)

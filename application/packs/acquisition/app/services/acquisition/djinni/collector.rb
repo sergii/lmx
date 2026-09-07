@@ -82,8 +82,18 @@ module Acquisition
 
         vacancies = parser.parse(response.body, base_url: source_base_url)
         discovered_count = vacancies.size
+        enrichments, enrichment_evidence, enrichment_fetch_count = collect_listing_enrichment(source_run)
+        fetched_count += enrichment_fetch_count
 
         observations = vacancies.map do |vacancy|
+          enrichment = enrichments[vacancy.external_id]
+          metadata = {
+            "evidence_kind" => EVIDENCE_KINDS.fetch(strategy_type),
+            "extraction_method" => parser_version,
+            "strategy" => strategy_type
+          }
+          metadata["listing_enrichment"] = enrichment_evidence if enrichment && enrichment_evidence
+
           RecordSourceObservation.call(
             source_run:,
             raw_payload:,
@@ -95,13 +105,9 @@ module Acquisition
             presence_state: "present",
             adapter_version: adapter_version,
             parser_version: parser_version,
-            payload: vacancy_payload(vacancy),
+            payload: vacancy_payload(vacancy, enrichment:),
             ingestion_provenance: ingestion.provenance,
-            metadata: {
-              "evidence_kind" => EVIDENCE_KINDS.fetch(strategy_type),
-              "extraction_method" => parser_version,
-              "strategy" => strategy_type
-            }
+            metadata:
           )
         end
 
@@ -207,17 +213,62 @@ module Acquisition
         end
       end
 
+      def listing_url
+        @listing_url ||= begin
+          uri = URI.join(source_base_url, "/jobs/")
+          uri.query = URI.encode_www_form(primary_keyword: search) if search
+          uri.to_s
+        end
+      end
+
+      def collect_listing_enrichment(source_run)
+        return [ {}, nil, 0 ] if search.blank?
+
+        response = http_client.get(listing_url)
+        raw_payload = RecordRawPayload.call(
+          source_run:,
+          payload: response.body,
+          captured_at: response.fetched_at,
+          source_uri: response.url,
+          content_type: response.content_type,
+          encoding: response.body.encoding.name,
+          provenance: {
+            "http_status" => response.status,
+            "request_url" => listing_url,
+            "purpose" => "rss_listing_enrichment"
+          }
+        )
+
+        enrichments = ListingEnrichmentParser.new.parse(response.body).index_by(&:external_id)
+        evidence = {
+          "adapter_version" => ENRICHMENT_ADAPTER_VERSION,
+          "parser_version" => ENRICHMENT_PARSER_VERSION,
+          "raw_payload_id" => raw_payload.typed_id,
+          "request_url" => listing_url
+        }.freeze
+
+        [ enrichments, evidence, 1 ]
+      rescue StandardError => error
+        Rails.logger.warn(
+          "Djinni listing enrichment unavailable: #{error.class}: #{error.message}"
+        )
+        [ {}, nil, 0 ]
+      end
+
       def default_run_key
         "djinni:#{strategy_type}:#{Digest::SHA256.hexdigest(request_url)[0, 16]}:#{started_at.iso8601(6)}"
       end
 
-      def vacancy_payload(vacancy)
+      def vacancy_payload(vacancy, enrichment:)
         {
           "record_type" => "job_posting",
           "source" => SOURCE_KEY,
           "source_record_key" => vacancy.external_id,
           "url" => vacancy.url,
           "title" => vacancy.title,
+          "company_name" => enrichment&.company_name,
+          "location_text" => enrichment&.location_text,
+          "compensation_text" => enrichment&.compensation_text,
           "summary" => vacancy.summary,
           "published_at" => vacancy.published_at&.iso8601
         }.compact
