@@ -7,10 +7,36 @@ def system!(*args)
   system(*args, exception: true)
 end
 
+def ensure_local_postgres!
+  if ARGV.include?("--skip-docker")
+    puts "\n== Skipping local PostgreSQL startup =="
+    return
+  end
+
+  unless system("docker", "compose", "version", out: File::NULL, err: File::NULL)
+    abort <<~MESSAGE
+      Docker Compose is required for the default local setup.
+      Install Docker Desktop, or run `bin/setup --skip-docker` when PostgreSQL is managed separately.
+    MESSAGE
+  end
+
+  unless system("docker", "info", out: File::NULL, err: File::NULL)
+    abort <<~MESSAGE
+      Docker is installed but the daemon is not available.
+      Start Docker Desktop and rerun `bin/setup`, or use `bin/setup --skip-docker` when PostgreSQL is managed separately.
+    MESSAGE
+  end
+
+  puts "\n== Starting local PostgreSQL =="
+  system! "docker", "compose", "up", "-d", "--wait", "db"
+end
+
 FileUtils.chdir APP_ROOT do
   puts "== Installing dependencies =="
   system("bundle check") || system!("bundle install")
   system! "npm install"
+
+  ensure_local_postgres!
 
   puts "\n== Preparing database =="
   migration_environment = { "POSTGRES_USER" => ENV.fetch("POSTGRES_MIGRATION_USER", "lmx") }
