@@ -68,6 +68,47 @@ RSpec.describe MarketCatalog::ReconcileSourceObservation, type: :model do
     expect(snapshot.facts.dig("source_payload", "location_text")).to eq("Kyiv")
   end
 
+  it "backfills a missing opening company from later source evidence" do
+    observed_at = Time.zone.parse("2026-09-07 12:00:00")
+    base_payload = {
+      "record_type" => "job_posting",
+      "source" => "djinni",
+      "source_record_key" => "844778",
+      "url" => "https://djinni.co/jobs/844778-ruby-on-rails-developer-ai-training/",
+      "title" => "Ruby on Rails Developer (AI Training)"
+    }
+    first_observation = {
+      id: TypeID.from_uuid("source_observation", SecureRandom.uuid).to_s,
+      source_key: "djinni",
+      transport: "rss",
+      external_id: "844778",
+      canonical_url: base_payload.fetch("url"),
+      observed_at:,
+      presence_state: "present",
+      payload: base_payload,
+      metadata: {}
+    }
+
+    first = described_class.call(observation: first_observation)
+    opening = MarketCatalog::JobOpening.find_by_typed_id!(first.fetch(:opening_id))
+    expect(opening.primary_company).to be_nil
+
+    enriched_observation = first_observation.merge(
+      id: TypeID.from_uuid("source_observation", SecureRandom.uuid).to_s,
+      observed_at: observed_at + 1.minute,
+      payload: base_payload.merge(
+        "company_name" => "DevMood",
+        "location_text" => "Full Remote · Ukraine",
+        "compensation_text" => "$1500-3000"
+      )
+    )
+
+    second = described_class.call(observation: enriched_observation)
+
+    expect(second.fetch(:opening_id)).to eq(first.fetch(:opening_id))
+    expect(opening.reload.primary_company.canonical_name).to eq("DevMood")
+  end
+
   it "rejects evidence that is not a present job posting" do
     observation = {
       id: TypeID.from_uuid("source_observation", SecureRandom.uuid).to_s,
